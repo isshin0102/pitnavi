@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Camera, CheckCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PhotoUpload, type UploadedPhoto } from "@/components/photo-upload";
 import type { ServiceCategory, CarType } from "@/lib/types";
 import { SERVICE_CATEGORY_LABELS, CAR_TYPE_LABELS } from "@/lib/types";
 
@@ -20,6 +21,7 @@ export default function NewRecordPage() {
   const [description, setDescription] = useState("");
   const [laborCost, setLaborCost] = useState("");
   const [duration, setDuration] = useState("");
+  const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
 
   function handleSubmit() {
     if (!title || !laborCost || !duration) return;
@@ -126,13 +128,7 @@ export default function NewRecordPage() {
 
         <div>
           <Label className="text-sm mb-2 block">施工写真（任意）</Label>
-          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-accent/50 transition-colors">
-            <Camera className="h-8 w-8 text-muted-foreground mb-2" />
-            <span className="text-xs text-muted-foreground">
-              写真をアップロード
-            </span>
-            <input type="file" accept="image/*" multiple className="hidden" />
-          </label>
+          <PhotoUpload onPhotosChange={setPhotos} maxPhotos={5} />
         </div>
 
         <Button

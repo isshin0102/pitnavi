@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Wrench } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Wrench, AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,10 +14,46 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { signIn, signUp } from "@/lib/data/auth";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const router = useRouter();
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const result = await signIn(loginEmail, loginPassword);
+    setLoading(false);
+
+    if (result.success) {
+      router.push("/dashboard");
+    } else {
+      setError(result.error ?? "ログインに失敗しました");
+    }
+  }
+
+  async function handleSignup(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    const result = await signUp(signupEmail, signupPassword);
+    setLoading(false);
+
+    if (result.success) {
+      setSuccess("確認メールを送信しました。メールを確認してください。");
+    } else {
+      setError(result.error ?? "登録に失敗しました");
+    }
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-4 py-8">
@@ -32,7 +68,26 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login">
+          {error && (
+            <div className="mb-4 flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="mb-4 flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-xs text-green-700">
+              <CheckCircle className="h-3 w-3 shrink-0" />
+              {success}
+            </div>
+          )}
+
+          <Tabs
+            defaultValue="login"
+            onValueChange={() => {
+              setError("");
+              setSuccess("");
+            }}
+          >
             <TabsList className="w-full mb-4">
               <TabsTrigger value="login" className="flex-1">
                 ログイン
@@ -43,12 +98,7 @@ export default function LoginPage() {
             </TabsList>
 
             <TabsContent value="login">
-              <form
-                className="space-y-4"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                }}
-              >
+              <form className="space-y-4" onSubmit={handleLogin}>
                 <div>
                   <Label htmlFor="login-email" className="text-sm mb-1 block">
                     メールアドレス
@@ -56,38 +106,33 @@ export default function LoginPage() {
                   <Input
                     id="login-email"
                     type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="you@example.com"
+                    required
                   />
                 </div>
                 <div>
-                  <Label
-                    htmlFor="login-password"
-                    className="text-sm mb-1 block"
-                  >
+                  <Label htmlFor="login-password" className="text-sm mb-1 block">
                     パスワード
                   </Label>
                   <Input
                     id="login-password"
                     type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                    minLength={6}
                   />
                 </div>
-                <Button type="submit" className="w-full">
-                  ログイン
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? "ログイン中..." : "ログイン"}
                 </Button>
               </form>
             </TabsContent>
 
             <TabsContent value="signup">
-              <form
-                className="space-y-4"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                }}
-              >
+              <form className="space-y-4" onSubmit={handleSignup}>
                 <div>
                   <Label htmlFor="signup-email" className="text-sm mb-1 block">
                     メールアドレス
@@ -95,20 +140,27 @@ export default function LoginPage() {
                   <Input
                     id="signup-email"
                     type="email"
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
                     placeholder="you@example.com"
+                    required
                   />
                 </div>
                 <div>
-                  <Label
-                    htmlFor="signup-password"
-                    className="text-sm mb-1 block"
-                  >
-                    パスワード
+                  <Label htmlFor="signup-password" className="text-sm mb-1 block">
+                    パスワード（6文字以上）
                   </Label>
-                  <Input id="signup-password" type="password" />
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
                 </div>
-                <Button type="submit" className="w-full">
-                  新規登録
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? "登録中..." : "新規登録"}
                 </Button>
               </form>
             </TabsContent>
