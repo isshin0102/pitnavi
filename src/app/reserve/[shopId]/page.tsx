@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { use } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle } from "lucide-react";
@@ -10,18 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { PaymentForm } from "@/components/payment-form";
 import type { CarType, ServiceMenu } from "@/lib/types";
 import { CAR_TYPE_LABELS, SERVICE_CATEGORY_LABELS } from "@/lib/types";
 import { formatYen, calculateFeeBreakdown } from "@/lib/fee-calculator";
 import { MOCK_SHOPS, MOCK_SERVICE_MENUS } from "@/lib/mock-data";
+
+type Step = "details" | "payment" | "done";
 
 export default function ReservePage({
   params,
@@ -29,11 +24,11 @@ export default function ReservePage({
   params: Promise<{ shopId: string }>;
 }) {
   const { shopId } = use(params);
-  const router = useRouter();
 
   const shop = MOCK_SHOPS.find((s) => s.id === shopId);
   const menus = MOCK_SERVICE_MENUS.filter((m) => m.shop_id === shopId);
 
+  const [step, setStep] = useState<Step>("details");
   const [carType, setCarType] = useState<CarType>("standard");
   const [selectedMenu, setSelectedMenu] = useState<ServiceMenu | null>(null);
   const [name, setName] = useState("");
@@ -41,7 +36,6 @@ export default function ReservePage({
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
-  const [submitted, setSubmitted] = useState(false);
 
   if (!shop) {
     return (
@@ -60,25 +54,73 @@ export default function ReservePage({
     ? calculateFeeBreakdown(selectedMenu.category, carType, price)
     : null;
 
-  const canSubmit =
+  const canProceed =
     selectedMenu && name.trim() && phone.trim() && date && time;
 
-  function handleSubmit() {
-    if (!canSubmit) return;
-    setSubmitted(true);
-  }
-
-  if (submitted) {
+  if (step === "done") {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 text-center">
         <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
-        <h1 className="text-xl font-bold mb-2">予約リクエストを送信しました</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          工場からの確認をお待ちください。確定後にお支払い案内をお送りします。
+        <h1 className="text-xl font-bold mb-2">予約＆お支払いが完了しました</h1>
+        <p className="text-sm text-muted-foreground mb-2">
+          {shop.name} - {selectedMenu?.name}
         </p>
-        <Button render={<Link href="/" />}>
-          トップに戻る
-        </Button>
+        <p className="text-sm text-muted-foreground mb-6">
+          {date} {time} / {CAR_TYPE_LABELS[carType]}
+        </p>
+        <Button render={<Link href="/" />}>トップに戻る</Button>
+      </div>
+    );
+  }
+
+  if (step === "payment" && breakdown && selectedMenu) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-6">
+        <button
+          onClick={() => setStep("details")}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" /> 予約内容に戻る
+        </button>
+
+        <h1 className="text-xl font-bold mb-2">お支払い</h1>
+        <p className="text-sm text-muted-foreground mb-6">
+          予約内容を確認のうえ、お支払いください
+        </p>
+
+        <div className="rounded-lg border p-3 mb-4 text-xs space-y-1">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">お名前</span>
+            <span>{name}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">電話番号</span>
+            <span>{phone}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">車種</span>
+            <span>{CAR_TYPE_LABELS[carType]}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">希望日時</span>
+            <span>
+              {date} {time}
+            </span>
+          </div>
+          {note && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">備考</span>
+              <span className="text-right max-w-[200px]">{note}</span>
+            </div>
+          )}
+        </div>
+
+        <PaymentForm
+          breakdown={breakdown}
+          shopName={shop.name}
+          menuName={selectedMenu.name}
+          onPaymentComplete={() => setStep("done")}
+        />
       </div>
     );
   }
@@ -101,7 +143,10 @@ export default function ReservePage({
             {(["light", "standard"] as const).map((ct) => (
               <button
                 key={ct}
-                onClick={() => setCarType(ct)}
+                onClick={() => {
+                  setCarType(ct);
+                  setSelectedMenu(null);
+                }}
                 className={`flex-1 rounded-lg border p-3 text-sm text-center transition-colors ${
                   carType === ct
                     ? "border-primary bg-primary/5 font-medium"
@@ -123,6 +168,11 @@ export default function ReservePage({
               const menuPrice =
                 carType === "light" ? menu.price_light : menu.price_standard;
               const isSelected = selectedMenu?.id === menu.id;
+              const menuBreakdown = calculateFeeBreakdown(
+                menu.category,
+                carType,
+                menuPrice
+              );
               return (
                 <button
                   key={menu.id}
@@ -213,26 +263,21 @@ export default function ReservePage({
         </div>
 
         {breakdown && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">お支払い金額</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between text-lg font-bold">
-                <span>合計</span>
-                <span>{formatYen(breakdown.servicePrice)}</span>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center justify-between text-lg font-bold">
+              <span>お支払い金額</span>
+              <span>{formatYen(breakdown.servicePrice)}</span>
+            </div>
+          </div>
         )}
 
         <Button
-          onClick={handleSubmit}
-          disabled={!canSubmit}
+          onClick={() => setStep("payment")}
+          disabled={!canProceed}
           className="w-full"
           size="lg"
         >
-          予約リクエストを送信
+          お支払いへ進む
         </Button>
       </div>
     </div>

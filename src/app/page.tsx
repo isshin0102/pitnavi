@@ -1,8 +1,31 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Search, MapPin } from "lucide-react";
 import { ShopCard } from "@/components/shop-card";
 import { MOCK_SHOPS, MOCK_SERVICE_MENUS } from "@/lib/mock-data";
+import type { Shop } from "@/lib/types";
+
+const MapView = dynamic(
+  () => import("@/components/map-view").then((m) => m.MapView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-lg border bg-muted/50 h-64 md:h-80 flex items-center justify-center text-sm text-muted-foreground">
+        地図を読み込み中...
+      </div>
+    ),
+  }
+);
 
 export default function HomePage() {
+  const router = useRouter();
+
+  function handleShopClick(shop: Shop) {
+    router.push(`/shops/${shop.id}`);
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <section className="mb-8 text-center">
@@ -32,9 +55,7 @@ export default function HomePage() {
             マップ
           </h2>
         </div>
-        <div className="rounded-lg border bg-muted/50 h-64 flex items-center justify-center text-sm text-muted-foreground">
-          地図コンポーネント（Leaflet）はDay 2で実装予定
-        </div>
+        <MapView shops={MOCK_SHOPS} onShopClick={handleShopClick} />
       </section>
 
       <section>
