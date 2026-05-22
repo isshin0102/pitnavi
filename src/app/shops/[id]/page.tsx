@@ -1,18 +1,15 @@
 "use client";
 
-import { use } from "react";
+import { useState, useEffect, use } from "react";
 import Link from "next/link";
-import { MapPin, Phone, ArrowLeft } from "lucide-react";
+import { MapPin, Phone, ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ServiceMenuTable } from "@/components/service-menu-table";
 import { WorkRecordCard } from "@/components/work-record-card";
-import {
-  MOCK_SHOPS,
-  MOCK_SERVICE_MENUS,
-  MOCK_WORK_RECORDS,
-} from "@/lib/mock-data";
+import { getShopById, getServiceMenus, getWorkRecords } from "@/lib/data/shops";
+import type { Shop, ServiceMenu, WorkRecord } from "@/lib/types";
 
 export default function ShopDetailPage({
   params,
@@ -20,7 +17,32 @@ export default function ShopDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const shop = MOCK_SHOPS.find((s) => s.id === id);
+  const [shop, setShop] = useState<Shop | null>(null);
+  const [menus, setMenus] = useState<ServiceMenu[]>([]);
+  const [records, setRecords] = useState<WorkRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const [s, m, r] = await Promise.all([
+        getShopById(id),
+        getServiceMenus(id),
+        getWorkRecords(id),
+      ]);
+      setShop(s);
+      setMenus(m);
+      setRecords(r);
+      setLoading(false);
+    })();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />読み込み中...
+      </div>
+    );
+  }
 
   if (!shop) {
     return (
@@ -29,9 +51,6 @@ export default function ShopDetailPage({
       </div>
     );
   }
-
-  const menus = MOCK_SERVICE_MENUS.filter((m) => m.shop_id === id);
-  const records = MOCK_WORK_RECORDS.filter((r) => r.shop_id === id);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">

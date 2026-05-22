@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { use } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { PaymentForm } from "@/components/payment-form";
-import type { CarType, ServiceMenu } from "@/lib/types";
+import type { CarType, ServiceMenu, Shop } from "@/lib/types";
 import { CAR_TYPE_LABELS, SERVICE_CATEGORY_LABELS } from "@/lib/types";
 import { formatYen, calculateFeeBreakdown } from "@/lib/fee-calculator";
-import { MOCK_SHOPS, MOCK_SERVICE_MENUS } from "@/lib/mock-data";
+import { getShopById, getServiceMenus } from "@/lib/data/shops";
 
 type Step = "details" | "payment" | "done";
 
@@ -25,8 +25,21 @@ export default function ReservePage({
 }) {
   const { shopId } = use(params);
 
-  const shop = MOCK_SHOPS.find((s) => s.id === shopId);
-  const menus = MOCK_SERVICE_MENUS.filter((m) => m.shop_id === shopId);
+  const [shop, setShop] = useState<Shop | null>(null);
+  const [menus, setMenus] = useState<ServiceMenu[]>([]);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const [s, m] = await Promise.all([
+        getShopById(shopId),
+        getServiceMenus(shopId),
+      ]);
+      setShop(s);
+      setMenus(m);
+      setPageLoading(false);
+    })();
+  }, [shopId]);
 
   const [step, setStep] = useState<Step>("details");
   const [carType, setCarType] = useState<CarType>("standard");
@@ -36,6 +49,14 @@ export default function ReservePage({
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
+
+  if (pageLoading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />読み込み中...
+      </div>
+    );
+  }
 
   if (!shop) {
     return (

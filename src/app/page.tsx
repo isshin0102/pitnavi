@@ -1,11 +1,12 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Search, MapPin } from "lucide-react";
+import { Search, MapPin, Loader2 } from "lucide-react";
 import { ShopCard } from "@/components/shop-card";
-import { MOCK_SHOPS, MOCK_SERVICE_MENUS } from "@/lib/mock-data";
-import type { Shop } from "@/lib/types";
+import { getShops, getAllMenus } from "@/lib/data/shops";
+import type { Shop, ServiceMenu } from "@/lib/types";
 
 const MapView = dynamic(
   () => import("@/components/map-view").then((m) => m.MapView),
@@ -21,9 +22,29 @@ const MapView = dynamic(
 
 export default function HomePage() {
   const router = useRouter();
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [menus, setMenus] = useState<ServiceMenu[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const [s, m] = await Promise.all([getShops(), getAllMenus()]);
+      setShops(s);
+      setMenus(m);
+      setLoading(false);
+    })();
+  }, []);
 
   function handleShopClick(shop: Shop) {
     router.push(`/shops/${shop.id}`);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />読み込み中...
+      </div>
+    );
   }
 
   return (
@@ -55,17 +76,17 @@ export default function HomePage() {
             マップ
           </h2>
         </div>
-        <MapView shops={MOCK_SHOPS} onShopClick={handleShopClick} />
+        <MapView shops={shops} onShopClick={handleShopClick} />
       </section>
 
       <section>
         <h2 className="text-lg font-semibold mb-4">おすすめの整備工場</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {MOCK_SHOPS.map((shop) => (
+          {shops.map((shop) => (
             <ShopCard
               key={shop.id}
               shop={shop}
-              menus={MOCK_SERVICE_MENUS.filter((m) => m.shop_id === shop.id)}
+              menus={menus.filter((m) => m.shop_id === shop.id)}
             />
           ))}
         </div>
