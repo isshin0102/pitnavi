@@ -62,7 +62,7 @@ export default function LoginPage() {
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
             <Wrench className="h-5 w-5 text-primary" />
           </div>
-          <CardTitle>ピットリンク</CardTitle>
+          <CardTitle>ピトナビ</CardTitle>
           <CardDescription>
             アカウントにログインまたは新規登録
           </CardDescription>

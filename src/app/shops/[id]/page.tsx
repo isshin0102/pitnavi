@@ -24,15 +24,20 @@ export default function ShopDetailPage({
 
   useEffect(() => {
     (async () => {
-      const [s, m, r] = await Promise.all([
-        getShopById(id),
-        getServiceMenus(id),
-        getWorkRecords(id),
-      ]);
-      setShop(s);
-      setMenus(m);
-      setRecords(r);
-      setLoading(false);
+      try {
+        const [s, m, r] = await Promise.all([
+          getShopById(id),
+          getServiceMenus(id),
+          getWorkRecords(id),
+        ]);
+        setShop(s);
+        setMenus(m);
+        setRecords(r);
+      } catch (e) {
+        console.error("Failed to load shop:", e);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [id]);
 

@@ -12,10 +12,22 @@ import {
 import type { FeeBreakdown } from "@/lib/fee-calculator";
 import { formatYen } from "@/lib/fee-calculator";
 
+export interface ReservationData {
+  shop_id: string;
+  service_menu_id: string;
+  car_type: "light" | "standard";
+  preferred_date: string;
+  preferred_time: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_note?: string;
+}
+
 interface PaymentFormProps {
   breakdown: FeeBreakdown;
   shopName: string;
   menuName: string;
+  reservationData: ReservationData;
   onPaymentComplete: () => void;
 }
 
@@ -23,6 +35,7 @@ export function PaymentForm({
   breakdown,
   shopName,
   menuName,
+  reservationData,
   onPaymentComplete,
 }: PaymentFormProps) {
   const [status, setStatus] = useState<
@@ -31,10 +44,34 @@ export function PaymentForm({
 
   async function handlePay() {
     setStatus("processing");
-    // Stripe未接続時はデモとして2秒後に成功扱い
-    await new Promise((r) => setTimeout(r, 2000));
-    setStatus("success");
-    setTimeout(onPaymentComplete, 1500);
+    try {
+      // 1. ログインユーザーのIDを取得
+      const { getCurrentUser } = await import("@/lib/data/auth");
+      const user = await getCurrentUser();
+
+      // 2. Supabaseに予約レコードを作成
+      const { createReservation } = await import("@/lib/data/dashboard");
+      await createReservation({
+        customer_id: user?.id ?? "anonymous",
+        shop_id: reservationData.shop_id,
+        service_menu_id: reservationData.service_menu_id,
+        car_type: reservationData.car_type,
+        preferred_date: reservationData.preferred_date,
+        preferred_time: reservationData.preferred_time,
+        customer_name: reservationData.customer_name,
+        customer_phone: reservationData.customer_phone,
+        customer_note: reservationData.customer_note,
+        total_price: breakdown.servicePrice,
+        platform_fee: breakdown.platformFee,
+        shop_payout: breakdown.shopPayout,
+      });
+
+      setStatus("success");
+      setTimeout(onPaymentComplete, 1500);
+    } catch (e) {
+      console.error("[PaymentForm] reservation create error:", e);
+      setStatus("error");
+    }
   }
 
   if (status === "success") {

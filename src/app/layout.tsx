@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ピットリンク - 整備工場予約",
+  title: "ピトナビ - 整備工場予約",
   description: "近くの整備工場をさがして、タイヤ交換・オイル交換・車検をかんたん予約",
 };
 

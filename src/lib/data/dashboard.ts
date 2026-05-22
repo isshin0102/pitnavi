@@ -219,6 +219,59 @@ export async function advanceReservationStatus(
   return data as Reservation;
 }
 
+/** 予約を新規作成する（お客さん側から） */
+export async function createReservation(params: {
+  customer_id: string;
+  shop_id: string;
+  service_menu_id: string;
+  car_type: "light" | "standard";
+  preferred_date: string;
+  preferred_time: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_note?: string;
+  total_price: number;
+  platform_fee: number;
+  shop_payout: number;
+}) {
+  if (!isSupabaseConfigured()) {
+    return { id: `mock-res-${Date.now()}`, ...params, status: "pending" };
+  }
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("reservations")
+    .insert({
+      ...params,
+      status: "pending",
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** お客様の予約一覧を取得（customer_id でフィルタ） */
+export async function getCustomerReservations(customerId: string) {
+  if (!isSupabaseConfigured()) return [];
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("reservations")
+    .select("*, service_menus(name, category), shops(name, address, phone)")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getCustomerReservations]", error);
+    return [];
+  }
+  return data ?? [];
+}
+
 /** 予約をキャンセルする */
 export async function cancelReservation(reservationId: string): Promise<void> {
   if (!isSupabaseConfigured()) return;

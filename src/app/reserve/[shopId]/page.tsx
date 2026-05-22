@@ -31,13 +31,18 @@ export default function ReservePage({
 
   useEffect(() => {
     (async () => {
-      const [s, m] = await Promise.all([
-        getShopById(shopId),
-        getServiceMenus(shopId),
-      ]);
-      setShop(s);
-      setMenus(m);
-      setPageLoading(false);
+      try {
+        const [s, m] = await Promise.all([
+          getShopById(shopId),
+          getServiceMenus(shopId),
+        ]);
+        setShop(s);
+        setMenus(m);
+      } catch (e) {
+        console.error("Failed to load reservation data:", e);
+      } finally {
+        setPageLoading(false);
+      }
     })();
   }, [shopId]);
 
@@ -140,6 +145,16 @@ export default function ReservePage({
           breakdown={breakdown}
           shopName={shop.name}
           menuName={selectedMenu.name}
+          reservationData={{
+            shop_id: shopId,
+            service_menu_id: selectedMenu.id,
+            car_type: carType,
+            preferred_date: date,
+            preferred_time: time,
+            customer_name: name,
+            customer_phone: phone,
+            customer_note: note || undefined,
+          }}
           onPaymentComplete={() => setStep("done")}
         />
       </div>

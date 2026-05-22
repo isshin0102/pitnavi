@@ -8,6 +8,7 @@ import {
   UtensilsCrossed,
   ClipboardList,
   CalendarCheck,
+  Camera,
   Store,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/data/auth";
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/menus", label: "メニュー管理", icon: UtensilsCrossed },
   { href: "/dashboard/records", label: "作業実績", icon: ClipboardList },
   { href: "/dashboard/reservations", label: "予約管理", icon: CalendarCheck },
+  { href: "/dashboard/works", label: "実績ギャラリー", icon: Camera },
 ];
 
 export default function DashboardLayout({

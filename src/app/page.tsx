@@ -28,10 +28,15 @@ export default function HomePage() {
 
   useEffect(() => {
     (async () => {
-      const [s, m] = await Promise.all([getShops(), getAllMenus()]);
-      setShops(s);
-      setMenus(m);
-      setLoading(false);
+      try {
+        const [s, m] = await Promise.all([getShops(), getAllMenus()]);
+        setShops(s);
+        setMenus(m);
+      } catch (e) {
+        console.error("Failed to load shops:", e);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 

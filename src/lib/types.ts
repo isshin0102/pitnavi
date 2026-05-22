@@ -103,6 +103,34 @@ export interface ReservationStatusLog {
   created_at: string;
 }
 
+export interface Work {
+  id: string;
+  shop_id: string;
+  title: string;
+  description: string | null;
+  car_name: string | null;
+  work_date: string | null;
+  before_image_url: string | null;
+  after_image_url: string | null;
+  extra_image_url: string | null;
+  category: string;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+  // JOINで取得される場合
+  shops?: { name: string; address: string };
+}
+
+export const WORK_CATEGORY_LABELS: Record<string, string> = {
+  tire_change: "タイヤ交換",
+  oil_change: "オイル交換",
+  inspection: "車検",
+  body_repair: "板金・塗装",
+  custom: "カスタム",
+  maintenance: "メンテナンス",
+  other: "その他",
+};
+
 export interface PlatformFeeRule {
   id: string;
   category: ServiceCategory;

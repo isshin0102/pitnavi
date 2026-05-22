@@ -43,6 +43,7 @@ import {
 import type { ReservationStatus } from "@/lib/types";
 import { formatYen } from "@/lib/fee-calculator";
 import { isSupabaseConfigured } from "@/lib/supabase/helpers";
+import { useReservationRealtime } from "@/lib/supabase/use-realtime";
 import { getCurrentUser } from "@/lib/data/auth";
 import {
   getMyReservations,
@@ -164,6 +165,7 @@ export default function ReservationsPage() {
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState(0);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [shopId, setShopId] = useState<string | null>(null);
 
   // 見積ダイアログ
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
@@ -174,6 +176,23 @@ export default function ReservationsPage() {
   useEffect(() => {
     loadReservations();
   }, []);
+
+  /* ---------- Supabase Realtime: 新規予約の自動追加 ---------- */
+  useReservationRealtime(
+    shopId ? `shop_id=eq.${shopId}` : null,
+    (updatedRow) => {
+      // 他端末でのステータス変更を反映
+      setReservations((prev) =>
+        prev.map((r) =>
+          r.id === updatedRow.id ? { ...r, ...updatedRow } : r
+        )
+      );
+    },
+    (newRow) => {
+      // 新規予約が入ったら先頭に追加
+      setReservations((prev) => [newRow, ...prev]);
+    }
+  );
 
   async function loadReservations() {
     if (!isSupabaseConfigured()) {
@@ -197,6 +216,7 @@ export default function ReservationsPage() {
       .maybeSingle();
 
     if (shop) {
+      setShopId(shop.id);
       const data = await getMyReservations(shop.id);
       setReservations(data);
     }
