@@ -1,5 +1,12 @@
 import { isSupabaseConfigured } from "@/lib/supabase/helpers";
-import type { ServiceMenu, WorkRecord, ServiceCategory, CarType } from "@/lib/types";
+import type {
+  ServiceMenu,
+  WorkRecord,
+  ServiceCategory,
+  CarType,
+  ReservationStatus,
+  Reservation,
+} from "@/lib/types";
 
 export async function getMyShop(userId: string) {
   if (!isSupabaseConfigured()) return null;
@@ -145,4 +152,82 @@ export async function getMyReservations(shopId: string) {
     .eq("shop_id", shopId)
     .order("created_at", { ascending: false });
   return data ?? [];
+}
+
+/** 予約のステータスを次へ進める */
+export async function advanceReservationStatus(
+  reservationId: string,
+  newStatus: ReservationStatus,
+  extra?: {
+    quoted_price?: number;
+    work_memo?: string;
+  }
+): Promise<Reservation> {
+  if (!isSupabaseConfigured()) {
+    return { id: reservationId, status: newStatus } as Reservation;
+  }
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+
+  // タイムスタンプマッピング
+  const timestampField: Partial<Record<ReservationStatus, string>> = {
+    confirmed: "confirmed_at",
+    visited: "visited_at",
+    quoted: "quoted_at",
+    contracted: "contracted_at",
+    completed: "completed_at",
+  };
+
+  const updatePayload: Record<string, unknown> = {
+    status: newStatus,
+  };
+
+  // タイムスタンプを自動設定
+  const tsField = timestampField[newStatus];
+  if (tsField) {
+    updatePayload[tsField] = new Date().toISOString();
+  }
+
+  // 見積提示時は金額・メモを保存
+  if (newStatus === "quoted" && extra) {
+    if (extra.quoted_price !== undefined) updatePayload.quoted_price = extra.quoted_price;
+    if (extra.work_memo !== undefined) updatePayload.work_memo = extra.work_memo;
+  }
+
+  const { data, error } = await supabase
+    .from("reservations")
+    .update(updatePayload)
+    .eq("id", reservationId)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  // ステータス変更ログを記録
+  const { data: userData } = await supabase.auth.getUser();
+  if (userData?.user) {
+    await supabase.from("reservation_status_logs").insert({
+      reservation_id: reservationId,
+      old_status: null, // 呼び出し側で設定可能
+      new_status: newStatus,
+      changed_by: userData.user.id,
+      note: extra?.work_memo || null,
+    });
+  }
+
+  return data as Reservation;
+}
+
+/** 予約をキャンセルする */
+export async function cancelReservation(reservationId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("reservations")
+    .update({ status: "cancelled" })
+    .eq("id", reservationId);
+  if (error) throw new Error(error.message);
 }

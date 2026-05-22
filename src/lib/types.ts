@@ -2,7 +2,14 @@ export type ServiceCategory = "tire_change" | "oil_change" | "inspection" | "oth
 
 export type CarType = "light" | "standard";
 
-export type ReservationStatus = "pending" | "confirmed" | "completed" | "cancelled";
+export type ReservationStatus =
+  | "pending"      // 予約リクエスト中
+  | "confirmed"    // 予約確定・来店待ち
+  | "visited"      // 来店済み・見積中
+  | "quoted"       // 見積提示済み
+  | "contracted"   // 成約・作業確定
+  | "completed"    // 作業完了
+  | "cancelled";   // キャンセル
 
 export interface Shop {
   id: string;
@@ -74,8 +81,26 @@ export interface Reservation {
   shop_payout: number;
   stripe_payment_intent_id: string | null;
   stripe_transfer_id: string | null;
+  // DAY2: 見積・ステータス管理
+  quoted_price: number | null;
+  work_memo: string | null;
+  quoted_at: string | null;
+  contracted_at: string | null;
+  completed_at: string | null;
+  visited_at: string | null;
+  confirmed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ReservationStatusLog {
+  id: string;
+  reservation_id: string;
+  old_status: string | null;
+  new_status: string;
+  changed_by: string | null;
+  note: string | null;
+  created_at: string;
 }
 
 export interface PlatformFeeRule {
@@ -101,7 +126,38 @@ export const CAR_TYPE_LABELS: Record<CarType, string> = {
 
 export const RESERVATION_STATUS_LABELS: Record<ReservationStatus, string> = {
   pending: "予約リクエスト中",
-  confirmed: "確定",
-  completed: "完了",
+  confirmed: "来店待ち",
+  visited: "来店済み",
+  quoted: "見積提示済み",
+  contracted: "成約",
+  completed: "作業完了",
   cancelled: "キャンセル",
+};
+
+/** ステータスの遷移順序（業務フロー） */
+export const STATUS_FLOW: ReservationStatus[] = [
+  "pending",
+  "confirmed",
+  "visited",
+  "quoted",
+  "contracted",
+  "completed",
+];
+
+/** 各ステータスから次に進めるステータス */
+export const NEXT_STATUS_MAP: Partial<Record<ReservationStatus, ReservationStatus>> = {
+  pending: "confirmed",
+  confirmed: "visited",
+  visited: "quoted",
+  quoted: "contracted",
+  contracted: "completed",
+};
+
+/** 次のステータスに進めるボタンラベル */
+export const ADVANCE_BUTTON_LABELS: Partial<Record<ReservationStatus, string>> = {
+  pending: "予約を確定する",
+  confirmed: "来店済みにする",
+  visited: "見積もりを提示する",
+  quoted: "成約にする",
+  contracted: "作業完了にする",
 };
