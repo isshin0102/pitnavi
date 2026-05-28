@@ -44,6 +44,34 @@ export async function createShop(params: {
   return data;
 }
 
+/** 店舗情報を更新する */
+export async function updateShop(
+  shopId: string,
+  params: {
+    name?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    description?: string;
+    phone?: string;
+    postal_code?: string;
+    specialty?: string[];
+  }
+) {
+  if (!isSupabaseConfigured()) return { id: shopId, ...params };
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("shops")
+    .update(params)
+    .eq("id", shopId)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function addServiceMenu(params: {
   shop_id: string;
   category: ServiceCategory;

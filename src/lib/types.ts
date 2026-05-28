@@ -22,6 +22,7 @@ export interface Shop {
   latitude: number;
   longitude: number;
   image_url: string | null;
+  specialty: string[];
   stripe_account_id: string | null;
   stripe_onboarded: boolean;
   is_active: boolean;

@@ -10,6 +10,7 @@ import {
   CalendarCheck,
   Camera,
   Store,
+  Settings,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/data/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/helpers";
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/records", label: "作業実績", icon: ClipboardList },
   { href: "/dashboard/reservations", label: "予約管理", icon: CalendarCheck },
   { href: "/dashboard/works", label: "実績ギャラリー", icon: Camera },
+  { href: "/dashboard/profile", label: "ショップ情報", icon: Settings },
 ];
 
 export default function DashboardLayout({
