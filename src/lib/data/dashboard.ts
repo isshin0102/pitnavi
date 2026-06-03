@@ -37,7 +37,7 @@ export async function createShop(params: {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("shops")
-    .insert(params)
+    .insert({ ...params, is_active: true })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
