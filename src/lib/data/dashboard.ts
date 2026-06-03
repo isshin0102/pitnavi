@@ -13,12 +13,28 @@ export async function getMyShop(userId: string) {
 
   const { createClient } = await import("@/lib/supabase/client");
   const supabase = createClient();
+  // 複数店舗対応: .single() → .limit(1) で最新1件を返す
   const { data } = await supabase
     .from("shops")
     .select("*")
     .eq("owner_id", userId)
-    .single();
-  return data;
+    .order("created_at", { ascending: false })
+    .limit(1);
+  return data?.[0] ?? null;
+}
+
+/** ユーザーの全店舗を取得（複数店舗対応） */
+export async function getMyShops(userId: string) {
+  if (!isSupabaseConfigured()) return [];
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("shops")
+    .select("*")
+    .eq("owner_id", userId)
+    .order("created_at", { ascending: false });
+  return data ?? [];
 }
 
 export async function createShop(params: {

@@ -1,9 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, Store, CreditCard, CheckCircle, ExternalLink, CalendarCheck, ClipboardList, UtensilsCrossed, Banknote } from "lucide-react";
 import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Loader2,
+  Store,
+  CreditCard,
+  Plus,
+  UtensilsCrossed,
+  ClipboardList,
+  MapPin,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +28,8 @@ import { createShop, getMyMenus, getMyWorkRecords } from "@/lib/data/dashboard";
 import type { Shop } from "@/lib/types";
 
 export default function DashboardPage() {
-  const [shop, setShop] = useState<Shop | null>(null);
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -31,10 +44,27 @@ export default function DashboardPage() {
   const [lat, setLat] = useState("35.6894");
   const [lng, setLng] = useState("139.6917");
 
+  // GPS で現在地を取得して緯度・経度をセット
+  function fillCurrentLocation() {
+    if (!navigator.geolocation) {
+      alert("このブラウザでは位置情報を利用できません");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(pos.coords.latitude.toFixed(6));
+        setLng(pos.coords.longitude.toFixed(6));
+      },
+      () => alert("位置情報の取得に失敗しました"),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
   useEffect(() => {
     (async () => {
       if (!isSupabaseConfigured()) {
-        setShop({ id: "mock", name: "デモ店舗" } as Shop);
+        setShops([{ id: "mock", name: "デモ店舗" } as Shop]);
+        setSelectedShop({ id: "mock", name: "デモ店舗" } as Shop);
         setMenuCount(3);
         setRecordCount(2);
         setLoading(false);
@@ -42,29 +72,52 @@ export default function DashboardPage() {
       }
 
       const user = await getCurrentUser();
-      if (!user) { setLoading(false); return; }
+      if (!user) {
+        setLoading(false);
+        return;
+      }
       setUserId(user.id);
 
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      const { data } = await supabase
+
+      // ★ 複数店舗に対応: .maybeSingle() → 全件取得
+      const { data, error } = await supabase
         .from("shops")
         .select("*")
         .eq("owner_id", user.id)
-        .maybeSingle();
+        .order("created_at", { ascending: false });
 
-      if (data) {
-        setShop(data as Shop);
-        const menus = await getMyMenus(data.id);
-        const records = await getMyWorkRecords(data.id);
+      if (error) {
+        console.error("[dashboard] shops fetch error:", error);
+      }
+
+      const myShops = (data as Shop[]) ?? [];
+      setShops(myShops);
+
+      if (myShops.length > 0) {
+        // 最新の店舗を選択
+        const first = myShops[0];
+        setSelectedShop(first);
+        const menus = await getMyMenus(first.id);
+        const records = await getMyWorkRecords(first.id);
         setMenuCount(menus.length);
         setRecordCount(records.length);
       } else {
         setShowForm(true);
       }
+
       setLoading(false);
     })();
   }, []);
+
+  async function handleSelectShop(shop: Shop) {
+    setSelectedShop(shop);
+    const menus = await getMyMenus(shop.id);
+    const records = await getMyWorkRecords(shop.id);
+    setMenuCount(menus.length);
+    setRecordCount(records.length);
+  }
 
   async function handleCreateShop() {
     if (!shopName || !address || !userId) return;
@@ -87,8 +140,21 @@ export default function DashboardPage() {
         .select("*")
         .eq("id", result.id)
         .single();
-      setShop(data as Shop);
+
+      const newShop = data as Shop;
+      setShops((prev) => [newShop, ...prev]);
+      setSelectedShop(newShop);
+      setMenuCount(0);
+      setRecordCount(0);
       setShowForm(false);
+
+      // フォームリセット
+      setShopName("");
+      setAddress("");
+      setPhone("");
+      setDescription("");
+      setLat("35.6894");
+      setLng("139.6917");
     } catch (e) {
       alert(e instanceof Error ? e.message : "店舗の登録に失敗しました");
     }
@@ -98,46 +164,98 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />読み込み中...
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        読み込み中...
       </div>
     );
   }
 
-  if (showForm || !shop) {
+  // 新規登録フォーム
+  if (showForm) {
     return (
       <div className="max-w-md">
-        <h2 className="text-lg font-semibold mb-2">店舗を登録</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold">店舗を登録</h2>
+          {shops.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowForm(false)}
+            >
+              戻る
+            </Button>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground mb-4">
-          ダッシュボードを利用するには、まず店舗情報を登録してください。
+          新しい店舗を追加します。
         </p>
         <div className="space-y-4">
           <div>
             <Label className="text-sm mb-1 block">店舗名</Label>
-            <Input value={shopName} onChange={(e) => setShopName(e.target.value)} placeholder="鈴木タイヤ＆オイル" />
+            <Input
+              value={shopName}
+              onChange={(e) => setShopName(e.target.value)}
+              placeholder="鈴木タイヤ＆オイル"
+            />
           </div>
           <div>
             <Label className="text-sm mb-1 block">住所</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="東京都渋谷区..." />
+            <Input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="東京都渋谷区..."
+            />
           </div>
           <div>
             <Label className="text-sm mb-1 block">電話番号（任意）</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="03-1234-5678" />
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="03-1234-5678"
+            />
           </div>
           <div>
             <Label className="text-sm mb-1 block">紹介文（任意）</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-sm mb-1 block">緯度</Label>
-              <Input type="number" step="0.0001" value={lat} onChange={(e) => setLat(e.target.value)} />
+              <Input
+                type="number"
+                step="0.0001"
+                value={lat}
+                onChange={(e) => setLat(e.target.value)}
+              />
             </div>
             <div>
               <Label className="text-sm mb-1 block">経度</Label>
-              <Input type="number" step="0.0001" value={lng} onChange={(e) => setLng(e.target.value)} />
+              <Input
+                type="number"
+                step="0.0001"
+                value={lng}
+                onChange={(e) => setLng(e.target.value)}
+              />
             </div>
           </div>
-          <Button onClick={handleCreateShop} disabled={!shopName || !address || saving} className="w-full">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={fillCurrentLocation}
+          >
+            <MapPin className="h-4 w-4 mr-1" />
+            現在地の緯度・経度を自動入力
+          </Button>
+          <Button
+            onClick={handleCreateShop}
+            disabled={!shopName || !address || saving}
+            className="w-full"
+          >
             {saving ? "登録中..." : "店舗を登録する"}
           </Button>
         </div>
@@ -145,47 +263,97 @@ export default function DashboardPage() {
     );
   }
 
-  const stats = [
-    { label: "登録メニュー", value: `${menuCount}件`, icon: UtensilsCrossed },
-    { label: "作業実績", value: `${recordCount}件`, icon: ClipboardList },
-  ];
-
+  // メインダッシュボード
   return (
     <div className="space-y-6">
+      {/* 店舗一覧（複数対応） */}
       <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Store className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">{shop.name}</h2>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Store className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">あなたの店舗</h2>
+            <Badge variant="secondary" className="text-[10px]">
+              {shops.length}件
+            </Badge>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowForm(true)}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            新しい店舗を追加
+          </Button>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {stats.map(({ label, value, icon: Icon }) => (
-            <Card key={label}>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{value}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+
+        {/* 複数店舗のタブ風切り替え */}
+        {shops.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+            {shops.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => handleSelectShop(s)}
+                className={`shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  selectedShop?.id === s.id
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background hover:bg-accent border-border"
+                }`}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              <CardTitle className="text-sm">Stripe Connect</CardTitle>
-            </div>
-            <Badge variant="secondary" className="text-[10px]">プロトタイプ</Badge>
+      {/* 選択中の店舗の詳細 */}
+      {selectedShop && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[
+              {
+                label: "登録メニュー",
+                value: `${menuCount}件`,
+                icon: UtensilsCrossed,
+              },
+              {
+                label: "作業実績",
+                value: `${recordCount}件`,
+                icon: ClipboardList,
+              },
+            ].map(({ label, value, icon: Icon }) => (
+              <Card key={label}>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {label}
+                  </CardTitle>
+                  <Icon className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{value}</p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-          <CardDescription className="text-xs">
-            本番環境ではStripeアカウント連携により自動決済が有効になります
-          </CardDescription>
-        </CardHeader>
-      </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  <CardTitle className="text-sm">Stripe Connect</CardTitle>
+                </div>
+                <Badge variant="secondary" className="text-[10px]">
+                  プロトタイプ
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                本番環境ではStripeアカウント連携により自動決済が有効になります
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

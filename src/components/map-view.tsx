@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { LocateFixed } from "lucide-react";
 import type { Shop } from "@/lib/types";
 
 export interface MapCenter {
@@ -32,7 +33,9 @@ export function MapView({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
+  const currentLocMarkerRef = useRef<L.CircleMarker | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [locating, setLocating] = useState(false);
 
   // マーカーを再描画する関数
   const updateMarkers = useCallback(
@@ -73,6 +76,70 @@ export function MapView({
     },
     [shops, selectedShopId, onShopClick]
   );
+
+  // 現在地取得 & マップ移動
+  const handleLocateMe = useCallback(async () => {
+    if (!mapInstanceRef.current) return;
+    if (!navigator.geolocation) {
+      alert("このブラウザでは位置情報を利用できません");
+      return;
+    }
+
+    setLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const map = mapInstanceRef.current!;
+        const L = await import("leaflet");
+
+        // マップ移動
+        map.flyTo([latitude, longitude], 14, { duration: 1.2 });
+
+        // 既存の現在地マーカーを削除
+        if (currentLocMarkerRef.current) {
+          currentLocMarkerRef.current.remove();
+        }
+
+        // 青い丸の現在地マーカーを追加
+        const locMarker = L.circleMarker([latitude, longitude], {
+          radius: 10,
+          fillColor: "#3b82f6",
+          fillOpacity: 0.9,
+          color: "#ffffff",
+          weight: 3,
+          opacity: 1,
+        }).addTo(map);
+
+        locMarker.bindPopup(
+          `<div style="text-align:center;font-size:12px;font-weight:600">📍 現在地</div>`
+        );
+
+        // 外側のリング（脈動アニメ風）
+        L.circleMarker([latitude, longitude], {
+          radius: 20,
+          fillColor: "#3b82f6",
+          fillOpacity: 0.15,
+          color: "#3b82f6",
+          weight: 1,
+          opacity: 0.4,
+        }).addTo(map);
+
+        currentLocMarkerRef.current = locMarker;
+        setLocating(false);
+      },
+      (err) => {
+        setLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          alert("位置情報の取得が許可されていません。\nブラウザの設定から位置情報を許可してください。");
+        } else {
+          alert("位置情報の取得に失敗しました。");
+        }
+        console.error("[GPS]", err);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
+  }, []);
 
   // 初期マップ作成
   useEffect(() => {
@@ -130,6 +197,20 @@ export function MapView({
   return (
     <div className={`relative rounded-lg overflow-hidden border ${className}`}>
       <div ref={mapRef} className="h-full w-full" />
+
+      {/* 現在地ボタン */}
+      {loaded && (
+        <button
+          onClick={handleLocateMe}
+          disabled={locating}
+          className="absolute bottom-4 right-4 z-[1000] flex items-center gap-1.5 rounded-full bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg border border-gray-200 hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-60"
+          title="現在地へ移動"
+        >
+          <LocateFixed className={`h-4 w-4 text-blue-500 ${locating ? "animate-pulse" : ""}`} />
+          {locating ? "取得中..." : "現在地"}
+        </button>
+      )}
+
       {!loaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-muted/80 text-sm text-muted-foreground">
           地図を読み込み中...
