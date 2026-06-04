@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, Lock, CheckCircle, AlertCircle } from "lucide-react";
+import { CreditCard, Lock, CheckCircle, AlertCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -41,18 +41,27 @@ export function PaymentForm({
   const [status, setStatus] = useState<
     "idle" | "processing" | "success" | "error"
   >("idle");
+  const [errorMsg, setErrorMsg] = useState("");
 
   async function handlePay() {
     setStatus("processing");
+    setErrorMsg("");
+
     try {
       // 1. ログインユーザーのIDを取得
       const { getCurrentUser } = await import("@/lib/data/auth");
       const user = await getCurrentUser();
 
+      if (!user) {
+        setErrorMsg("ログインが必要です。ログインページからやり直してください。");
+        setStatus("error");
+        return;
+      }
+
       // 2. Supabaseに予約レコードを作成
       const { createReservation } = await import("@/lib/data/dashboard");
-      await createReservation({
-        customer_id: user?.id ?? "anonymous",
+      const reservation = await createReservation({
+        customer_id: user.id,
         shop_id: reservationData.shop_id,
         service_menu_id: reservationData.service_menu_id,
         car_type: reservationData.car_type,
@@ -66,10 +75,43 @@ export function PaymentForm({
         shop_payout: breakdown.shopPayout,
       });
 
-      setStatus("success");
-      setTimeout(onPaymentComplete, 1500);
+      // 3. Stripe Checkout Session を作成
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reservationId: reservation.id,
+          shopId: reservationData.shop_id,
+          shopName,
+          menuName,
+          totalPrice: breakdown.servicePrice,
+          platformFee: breakdown.platformFee,
+          origin: window.location.origin,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.url) {
+        // Stripe Checkout ページにリダイレクト
+        window.location.href = data.url;
+        return;
+      }
+
+      // Stripe未設定の場合 → 予約のみ完了として処理
+      if (data.error?.includes("not configured")) {
+        console.log("[PaymentForm] Stripe not configured, reservation only");
+        setStatus("success");
+        setTimeout(onPaymentComplete, 1500);
+        return;
+      }
+
+      throw new Error(data.error || "決済の初期化に失敗しました");
     } catch (e) {
-      console.error("[PaymentForm] reservation create error:", e);
+      console.error("[PaymentForm] error:", e);
+      setErrorMsg(
+        e instanceof Error ? e.message : "お支払い処理中にエラーが発生しました"
+      );
       setStatus("error");
     }
   }
@@ -79,7 +121,10 @@ export function PaymentForm({
       <Card className="border-green-200 bg-green-50">
         <CardContent className="py-6 text-center">
           <CheckCircle className="mx-auto h-10 w-10 text-green-500 mb-3" />
-          <p className="font-medium text-green-800">お支払いが完了しました</p>
+          <p className="font-medium text-green-800">予約が完了しました</p>
+          <p className="text-xs text-green-600 mt-1">
+            Stripe連携後はカード決済が利用可能になります
+          </p>
         </CardContent>
       </Card>
     );
@@ -107,6 +152,10 @@ export function PaymentForm({
             <span className="text-muted-foreground">作業料金</span>
             <span>{formatYen(breakdown.servicePrice)}</span>
           </div>
+          <div className="flex justify-between text-[10px]">
+            <span className="text-muted-foreground">（うちプラットフォーム手数料）</span>
+            <span className="text-muted-foreground">{formatYen(breakdown.platformFee)}</span>
+          </div>
         </div>
 
         <div className="flex items-center justify-between text-lg font-bold border-t pt-3">
@@ -114,39 +163,10 @@ export function PaymentForm({
           <span>{formatYen(breakdown.servicePrice)}</span>
         </div>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
-              カード番号
-            </label>
-            <div className="rounded-md border bg-background px-3 py-2.5 text-sm text-muted-foreground">
-              Stripe Elements（接続後に有効化）
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
-                有効期限
-              </label>
-              <div className="rounded-md border bg-background px-3 py-2.5 text-sm text-muted-foreground">
-                MM / YY
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
-                CVC
-              </label>
-              <div className="rounded-md border bg-background px-3 py-2.5 text-sm text-muted-foreground">
-                123
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {status === "error" && (
-          <div className="flex items-center gap-2 text-xs text-destructive">
-            <AlertCircle className="h-3 w-3" />
-            お支払いに失敗しました。もう一度お試しください。
+        {errorMsg && (
+          <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">
+            <AlertCircle className="h-3 w-3 shrink-0" />
+            {errorMsg}
           </div>
         )}
 
@@ -162,13 +182,14 @@ export function PaymentForm({
             <>
               <Lock className="mr-1 h-4 w-4" />
               {formatYen(breakdown.servicePrice)} を支払う
+              <ExternalLink className="ml-1 h-3 w-3" />
             </>
           )}
         </Button>
 
         <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
           <Lock className="h-3 w-3" />
-          Stripeによる安全な決済
+          Stripeの安全な決済ページへ移動します
         </p>
       </CardContent>
     </Card>

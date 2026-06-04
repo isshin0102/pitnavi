@@ -56,9 +56,10 @@ export default function DashboardLayout({
         .from("shops")
         .select("id")
         .eq("owner_id", user.id)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(1);
 
-      setShopId(data?.id ?? null);
+      setShopId(data?.[0]?.id ?? null);
       setLoading(false);
     })();
   }, []);
