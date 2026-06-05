@@ -17,6 +17,7 @@ import {
   ClipboardList,
   Store,
   LogIn,
+  CreditCard,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,6 +186,7 @@ export default function MyPage() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [activeFilter, setActiveFilter] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
+  const [payingId, setPayingId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -233,6 +235,35 @@ export default function MyPage() {
       setReservations((prev) => [newRow, ...prev]);
     }
   );
+
+  /** 見積もりを承諾して Stripe Checkout へ遷移 */
+  async function handleAcceptEstimate(res: any) {
+    setPayingId(res.id);
+    try {
+      const response = await fetch("/api/stripe/estimate-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reservationId: res.id,
+          shopName: res.shops?.name ?? "店舗",
+          menuName: res.service_menus?.name ?? "作業",
+          quotedPrice: res.quoted_price,
+          workMemo: res.work_memo ?? "",
+          origin: window.location.origin,
+        }),
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error ?? "決済ページの作成に失敗しました");
+        setPayingId(null);
+      }
+    } catch (e) {
+      alert("通信エラーが発生しました");
+      setPayingId(null);
+    }
+  }
 
   if (loading) {
     return (
@@ -400,6 +431,27 @@ export default function MyPage() {
                         <p className="mt-1.5 text-xs text-orange-700 leading-relaxed">
                           {res.work_memo}
                         </p>
+                      )}
+
+                      {/* 見積もり承諾 & 決済ボタン（quoted ステータスのときだけ） */}
+                      {status === "quoted" && (
+                        <Button
+                          className="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                          onClick={() => handleAcceptEstimate(res)}
+                          disabled={payingId === res.id}
+                        >
+                          {payingId === res.id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              決済ページへ移動中...
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4 mr-2" />
+                              この見積もりで依頼する（決済へ進む）
+                            </>
+                          )}
+                        </Button>
                       )}
                     </div>
                   )}

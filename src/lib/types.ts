@@ -82,6 +82,7 @@ export interface Reservation {
   shop_payout: number;
   stripe_payment_intent_id: string | null;
   stripe_transfer_id: string | null;
+  estimate_payment_intent_id: string | null;
   // DAY2: 見積・ステータス管理
   quoted_price: number | null;
   work_memo: string | null;

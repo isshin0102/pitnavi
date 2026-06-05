@@ -36,20 +36,36 @@ export async function POST(request: Request) {
       case "checkout.session.completed": {
         const session = event.data.object;
         const reservationId = session.metadata?.reservation_id;
+        const checkoutType = session.metadata?.checkout_type;
 
         if (reservationId && supabase) {
-          // 予約ステータスを confirmed に、決済情報を保存
-          await supabase
-            .from("reservations")
-            .update({
-              status: "confirmed",
-              payment_status: "paid",
-              stripe_payment_intent_id: session.payment_intent as string,
-              confirmed_at: new Date().toISOString(),
-            })
-            .eq("id", reservationId);
+          if (checkoutType === "estimate") {
+            // 見積もり承諾決済 → contracted（成約）に更新
+            await supabase
+              .from("reservations")
+              .update({
+                status: "contracted",
+                payment_status: "paid",
+                estimate_payment_intent_id: session.payment_intent as string,
+                contracted_at: new Date().toISOString(),
+              })
+              .eq("id", reservationId);
 
-          console.log(`[Webhook] Reservation ${reservationId} → confirmed + paid`);
+            console.log(`[Webhook] Estimate paid: ${reservationId} → contracted`);
+          } else {
+            // 通常の予約時決済 → confirmed に更新
+            await supabase
+              .from("reservations")
+              .update({
+                status: "confirmed",
+                payment_status: "paid",
+                stripe_payment_intent_id: session.payment_intent as string,
+                confirmed_at: new Date().toISOString(),
+              })
+              .eq("id", reservationId);
+
+            console.log(`[Webhook] Booking paid: ${reservationId} → confirmed`);
+          }
         }
         break;
       }
