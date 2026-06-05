@@ -190,11 +190,16 @@ export async function getMyReservations(shopId: string) {
 
   const { createClient } = await import("@/lib/supabase/client");
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("reservations")
     .select("*, service_menus(name)")
     .eq("shop_id", shopId)
     .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getMyReservations]", error);
+    return [];
+  }
   return data ?? [];
 }
 

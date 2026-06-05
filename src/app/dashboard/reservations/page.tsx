@@ -209,12 +209,18 @@ export default function ReservationsPage() {
 
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
-    const { data: shop } = await supabase
+    const { data: shops, error: shopErr } = await supabase
       .from("shops")
       .select("id")
       .eq("owner_id", user.id)
-      .maybeSingle();
+      .order("created_at", { ascending: false })
+      .limit(1);
 
+    if (shopErr) {
+      console.error("[Reservations] shop query error:", shopErr);
+    }
+
+    const shop = shops?.[0] ?? null;
     if (shop) {
       setShopId(shop.id);
       const data = await getMyReservations(shop.id);
