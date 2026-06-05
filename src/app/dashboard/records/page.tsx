@@ -28,12 +28,14 @@ export default function RecordsPage() {
 
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      const { data: shop } = await supabase
+      const { data: shops } = await supabase
         .from("shops")
         .select("id")
         .eq("owner_id", user.id)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(1);
 
+      const shop = shops?.[0] ?? null;
       if (shop) {
         const data = await getMyWorkRecords(shop.id);
         setRecords(data);

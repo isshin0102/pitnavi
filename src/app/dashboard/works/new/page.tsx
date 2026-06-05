@@ -61,12 +61,13 @@ export default function NewWorkPage() {
 
         const { createClient } = await import("@/lib/supabase/client");
         const supabase = createClient();
-        const { data: shop } = await supabase
+        const { data: shops } = await supabase
           .from("shops")
           .select("id")
           .eq("owner_id", user.id)
-          .maybeSingle();
-        setShopId(shop?.id ?? null);
+          .order("created_at", { ascending: false })
+          .limit(1);
+        setShopId(shops?.[0]?.id ?? null);
       } catch (e) {
         console.error("[NewWorkPage] init error:", e);
       } finally {

@@ -98,14 +98,16 @@ export default function ShopProfilePage() {
 
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      const { data } = await supabase
+      const { data: shops } = await supabase
         .from("shops")
         .select("*")
         .eq("owner_id", user.id)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(1);
 
-      if (data) {
-        const shopData = data as Shop;
+      const firstShop = shops?.[0] ?? null;
+      if (firstShop) {
+        const shopData = firstShop as Shop;
         setShop(shopData);
         populateForm(shopData);
       }
