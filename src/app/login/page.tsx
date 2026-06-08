@@ -41,11 +41,12 @@ function LoginForm() {
     setError("");
     setLoading(true);
     const result = await signIn(loginEmail, loginPassword);
-    setLoading(false);
 
     if (result.success) {
-      router.push(redirectTo);
+      // フルページリロードでCookie/セッションを確実に反映させる
+      window.location.href = redirectTo;
     } else {
+      setLoading(false);
       setError(result.error ?? "ログインに失敗しました");
     }
   }
@@ -56,11 +57,25 @@ function LoginForm() {
     setSuccess("");
     setLoading(true);
     const result = await signUp(signupEmail, signupPassword);
-    setLoading(false);
 
     if (result.success) {
-      setSuccess("確認メールを送信しました。メールを確認してください。");
+      // メール確認が無効の場合は即座にダッシュボードへ遷移
+      // メール確認が有効の場合はメッセージを表示
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session) {
+        // セッションあり＝メール確認不要設定。即ログイン
+        window.location.href = "/dashboard";
+      } else {
+        setLoading(false);
+        setSuccess(
+          "確認メールを送信しました。メール内のリンクをクリックしてログインしてください。"
+        );
+      }
     } else {
+      setLoading(false);
       setError(result.error ?? "登録に失敗しました");
     }
   }
