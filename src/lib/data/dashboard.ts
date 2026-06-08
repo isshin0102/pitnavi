@@ -172,6 +172,25 @@ export async function getMyMenus(shopId: string): Promise<ServiceMenu[]> {
   return (data as ServiceMenu[]) ?? [];
 }
 
+/** 全店舗のメニューをまとめて取得（オーナー用） */
+export async function getAllMyMenus(shopIds: string[]): Promise<ServiceMenu[]> {
+  if (!isSupabaseConfigured() || shopIds.length === 0) return [];
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("service_menus")
+    .select("*")
+    .in("shop_id", shopIds)
+    .order("created_at");
+
+  if (error) {
+    console.error("[getAllMyMenus]", error);
+    return [];
+  }
+  return (data as ServiceMenu[]) ?? [];
+}
+
 export async function getMyWorkRecords(shopId: string): Promise<WorkRecord[]> {
   if (!isSupabaseConfigured()) return [];
 

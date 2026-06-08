@@ -3,20 +3,24 @@
 import { useState, useEffect } from "react";
 import { use } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle,
+  Loader2,
+  Send,
+  AlertCircle,
+  Info,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { PaymentForm } from "@/components/payment-form";
 import type { CarType, ServiceMenu, Shop } from "@/lib/types";
 import { CAR_TYPE_LABELS, SERVICE_CATEGORY_LABELS } from "@/lib/types";
-import { formatYen, calculateFeeBreakdown } from "@/lib/fee-calculator";
+import { formatYen } from "@/lib/fee-calculator";
 import { getShopById, getServiceMenus } from "@/lib/data/shops";
-
-type Step = "details" | "payment" | "done";
 
 export default function ReservePage({
   params,
@@ -46,7 +50,7 @@ export default function ReservePage({
     })();
   }, [shopId]);
 
-  const [step, setStep] = useState<Step>("details");
+  const [step, setStep] = useState<"details" | "done">("details");
   const [carType, setCarType] = useState<CarType>("standard");
   const [selectedMenu, setSelectedMenu] = useState<ServiceMenu | null>(null);
   const [name, setName] = useState("");
@@ -54,11 +58,14 @@ export default function ReservePage({
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   if (pageLoading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />読み込み中...
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        読み込み中...
       </div>
     );
   }
@@ -76,91 +83,96 @@ export default function ReservePage({
       ? selectedMenu.price_light
       : selectedMenu.price_standard
     : 0;
-  const breakdown = selectedMenu
-    ? calculateFeeBreakdown(selectedMenu.category, carType, price)
-    : null;
 
+  const isInspection = selectedMenu?.category === "inspection";
   const canProceed =
     selectedMenu && name.trim() && phone.trim() && date && time;
 
+  /** 予約リクエストを送信（決済なし） */
+  async function handleSubmitReservation() {
+    if (!selectedMenu || !canProceed) return;
+    setSubmitting(true);
+    setErrorMsg("");
+
+    try {
+      const { getCurrentUser } = await import("@/lib/data/auth");
+      const user = await getCurrentUser();
+
+      if (!user) {
+        setErrorMsg("ログインが必要です。");
+        setSubmitting(false);
+        return;
+      }
+
+      const { createReservation } = await import("@/lib/data/dashboard");
+      await createReservation({
+        customer_id: user.id,
+        shop_id: shopId,
+        service_menu_id: selectedMenu.id,
+        car_type: carType,
+        preferred_date: date,
+        preferred_time: time,
+        customer_name: name,
+        customer_phone: phone,
+        customer_note: note || undefined,
+        total_price: price,
+        platform_fee: 0,
+        shop_payout: price,
+      });
+
+      setStep("done");
+    } catch (e) {
+      console.error("[Reserve] submit error:", e);
+      setErrorMsg(
+        e instanceof Error ? e.message : "予約リクエストの送信に失敗しました"
+      );
+      setSubmitting(false);
+    }
+  }
+
+  /* ========== 完了画面 ========== */
   if (step === "done") {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 text-center">
         <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
-        <h1 className="text-xl font-bold mb-2">予約＆お支払いが完了しました</h1>
-        <p className="text-sm text-muted-foreground mb-2">
+        <h1 className="text-xl font-bold mb-2">予約リクエストを送信しました</h1>
+        <p className="text-sm text-muted-foreground mb-1">
           {shop.name} - {selectedMenu?.name}
         </p>
         <p className="text-sm text-muted-foreground mb-6">
           {date} {time} / {CAR_TYPE_LABELS[carType]}
         </p>
-        <Button render={<Link href="/" />}>トップに戻る</Button>
-      </div>
-    );
-  }
 
-  if (step === "payment" && breakdown && selectedMenu) {
-    return (
-      <div className="mx-auto max-w-2xl px-4 py-6">
-        <button
-          onClick={() => setStep("details")}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" /> 予約内容に戻る
-        </button>
-
-        <h1 className="text-xl font-bold mb-2">お支払い</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          予約内容を確認のうえ、お支払いください
-        </p>
-
-        <div className="rounded-lg border p-3 mb-4 text-xs space-y-1">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">お名前</span>
-            <span>{name}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">電話番号</span>
-            <span>{phone}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">車種</span>
-            <span>{CAR_TYPE_LABELS[carType]}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">希望日時</span>
-            <span>
-              {date} {time}
-            </span>
-          </div>
-          {note && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">備考</span>
-              <span className="text-right max-w-[200px]">{note}</span>
-            </div>
-          )}
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 mb-6 text-left">
+          <p className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-1">
+            <Info className="h-4 w-4" />
+            今後の流れ
+          </p>
+          <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
+            <li>工場が予約リクエストを確認します</li>
+            <li>ご来店いただき、現車を確認します</li>
+            <li>工場から正式な見積もりが届きます</li>
+            <li>見積もりを確認して、決済・作業依頼を行います</li>
+          </ol>
         </div>
 
-        <PaymentForm
-          breakdown={breakdown}
-          shopName={shop.name}
-          menuName={selectedMenu.name}
-          reservationData={{
-            shop_id: shopId,
-            service_menu_id: selectedMenu.id,
-            car_type: carType,
-            preferred_date: date,
-            preferred_time: time,
-            customer_name: name,
-            customer_phone: phone,
-            customer_note: note || undefined,
-          }}
-          onPaymentComplete={() => setStep("done")}
-        />
+        <div className="flex flex-col gap-2">
+          <Button render={<Link href="/mypage" />} className="w-full">
+            マイページで状況を確認
+          </Button>
+          <Button
+            variant="outline"
+            render={<Link href="/" />}
+            className="w-full"
+          >
+            トップに戻る
+          </Button>
+        </div>
       </div>
     );
   }
 
+  /* ========== 予約フォーム ========== */
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       <Link
@@ -173,6 +185,7 @@ export default function ReservePage({
       <h1 className="text-xl font-bold mb-6">予約リクエスト</h1>
 
       <div className="space-y-6">
+        {/* 車種選択 */}
         <div>
           <Label className="text-sm font-medium mb-2 block">車種を選択</Label>
           <div className="flex gap-2">
@@ -195,6 +208,7 @@ export default function ReservePage({
           </div>
         </div>
 
+        {/* メニュー選択 */}
         <div>
           <Label className="text-sm font-medium mb-2 block">
             作業メニューを選択
@@ -204,11 +218,7 @@ export default function ReservePage({
               const menuPrice =
                 carType === "light" ? menu.price_light : menu.price_standard;
               const isSelected = selectedMenu?.id === menu.id;
-              const menuBreakdown = calculateFeeBreakdown(
-                menu.category,
-                carType,
-                menuPrice
-              );
+              const isMenuInspection = menu.category === "inspection";
               return (
                 <button
                   key={menu.id}
@@ -228,8 +238,19 @@ export default function ReservePage({
                     </div>
                     <span className="text-sm font-bold">
                       {formatYen(menuPrice)}
+                      {isMenuInspection && "〜"}
                     </span>
                   </div>
+                  {isMenuInspection && (
+                    <p className="text-[10px] text-orange-600 mt-1">
+                      ※お車の状態により追加整備費用が発生する場合があります
+                    </p>
+                  )}
+                  {menu.description && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {menu.description}
+                    </p>
+                  )}
                 </button>
               );
             })}
@@ -238,6 +259,7 @@ export default function ReservePage({
 
         <Separator />
 
+        {/* お客様情報 */}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="name" className="text-sm mb-1 block">
@@ -298,23 +320,59 @@ export default function ReservePage({
           />
         </div>
 
-        {breakdown && (
+        {/* 参考価格表示 */}
+        {selectedMenu && (
           <div className="rounded-lg border p-4">
-            <div className="flex items-center justify-between text-lg font-bold">
-              <span>お支払い金額</span>
-              <span>{formatYen(breakdown.servicePrice)}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                {isInspection ? "参考基本料金" : "参考料金"}
+              </span>
+              <span className="text-lg font-bold">
+                {formatYen(price)}
+                {isInspection && "〜"}
+              </span>
             </div>
+            {isInspection && (
+              <p className="text-[10px] text-orange-600 mt-2">
+                ※車検は分解整備後に追加整備（ブレーキパッド交換・ブーツ類等）が発生する場合があります。
+                正確な金額は店舗での現車確認後、アプリ内で最終見積もりを提示します。
+              </p>
+            )}
+            <p className="text-[10px] text-muted-foreground mt-1">
+              ※最終金額は店舗の見積もり後に確定します。この時点で決済は発生しません。
+            </p>
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">
+            <AlertCircle className="h-3 w-3 shrink-0" />
+            {errorMsg}
           </div>
         )}
 
         <Button
-          onClick={() => setStep("payment")}
-          disabled={!canProceed}
+          onClick={handleSubmitReservation}
+          disabled={!canProceed || submitting}
           className="w-full"
           size="lg"
         >
-          お支払いへ進む
+          {submitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              送信中...
+            </>
+          ) : (
+            <>
+              <Send className="mr-2 h-4 w-4" />
+              予約リクエストを送る
+            </>
+          )}
         </Button>
+
+        <p className="text-[10px] text-center text-muted-foreground">
+          この時点ではお支払いは発生しません。店舗からの見積もり後にお支払いへ進みます。
+        </p>
       </div>
     </div>
   );
