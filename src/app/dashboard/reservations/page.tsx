@@ -47,6 +47,7 @@ import { useReservationRealtime } from "@/lib/supabase/use-realtime";
 import { getCurrentUser } from "@/lib/data/auth";
 import {
   getMyReservations,
+  getAllMyReservations,
   advanceReservationStatus,
   cancelReservation,
 } from "@/lib/data/dashboard";
@@ -213,17 +214,17 @@ export default function ReservationsPage() {
       .from("shops")
       .select("id")
       .eq("owner_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .order("created_at", { ascending: false });
 
     if (shopErr) {
       console.error("[Reservations] shop query error:", shopErr);
     }
 
-    const shop = shops?.[0] ?? null;
-    if (shop) {
-      setShopId(shop.id);
-      const data = await getMyReservations(shop.id);
+    if (shops && shops.length > 0) {
+      setShopId(shops[0].id);
+      // 全店舗の予約をまとめて取得
+      const shopIds = shops.map((s: { id: string }) => s.id);
+      const data = await getAllMyReservations(shopIds);
       setReservations(data);
     }
     setLoading(false);

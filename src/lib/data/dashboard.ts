@@ -203,6 +203,25 @@ export async function getMyReservations(shopId: string) {
   return data ?? [];
 }
 
+/** 全店舗の予約をまとめて取得（オーナー用） */
+export async function getAllMyReservations(shopIds: string[]) {
+  if (!isSupabaseConfigured() || shopIds.length === 0) return [];
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("reservations")
+    .select("*, service_menus(name), shops(name)")
+    .in("shop_id", shopIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getAllMyReservations]", error);
+    return [];
+  }
+  return data ?? [];
+}
+
 /** 予約のステータスを次へ進める */
 export async function advanceReservationStatus(
   reservationId: string,
