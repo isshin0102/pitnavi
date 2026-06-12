@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Loader2,
   Save,
@@ -12,15 +13,19 @@ import {
   X,
   Plus,
   CheckCircle,
+  Trash2,
+  AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { isSupabaseConfigured } from "@/lib/supabase/helpers";
 import { getCurrentUser } from "@/lib/data/auth";
-import { updateShop } from "@/lib/data/dashboard";
+import { updateShop, deleteShop } from "@/lib/data/dashboard";
 import type { Shop } from "@/lib/types";
 
 /* ---------- おすすめタグ ---------- */
@@ -48,16 +53,19 @@ const SUGGESTED_SPECIALTIES = [
 ];
 
 export default function ShopProfilePage() {
+  const router = useRouter();
   const [shop, setShop] = useState<Shop | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // フォーム state
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [description, setDescription] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [specialty, setSpecialty] = useState<string[]>([]);
@@ -78,6 +86,7 @@ export default function ShopProfilePage() {
           longitude: 139.6917,
           image_url: null,
           specialty: ["ドリフト", "シャコタン"],
+          license_number: "第123456789012号",
           stripe_account_id: null,
           stripe_onboarded: false,
           is_active: true,
@@ -102,6 +111,7 @@ export default function ShopProfilePage() {
         .from("shops")
         .select("*")
         .eq("owner_id", user.id)
+        .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(1);
 
@@ -120,6 +130,7 @@ export default function ShopProfilePage() {
     setAddress(s.address || "");
     setPhone(s.phone || "");
     setDescription(s.description || "");
+    setLicenseNumber(s.license_number || "");
     setLat(String(s.latitude || ""));
     setLng(String(s.longitude || ""));
     setSpecialty(s.specialty || []);
@@ -144,6 +155,10 @@ export default function ShopProfilePage() {
 
   async function handleSave() {
     if (!shop || !name || !address) return;
+    if (!licenseNumber.trim()) {
+      alert("古物商許可番号は必須入力です");
+      return;
+    }
     setSaving(true);
     setSaved(false);
     try {
@@ -155,6 +170,7 @@ export default function ShopProfilePage() {
         latitude: lat ? parseFloat(lat) : undefined,
         longitude: lng ? parseFloat(lng) : undefined,
         specialty,
+        license_number: licenseNumber.trim(),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -162,6 +178,26 @@ export default function ShopProfilePage() {
       alert(e instanceof Error ? e.message : "保存に失敗しました");
     }
     setSaving(false);
+  }
+
+  async function handleDeleteShop() {
+    if (!shop) return;
+
+    const confirmed = confirm(
+      "本当にこの店舗を削除しますか？この操作は取り消せません。"
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await deleteShop(shop.id);
+      // ダッシュボード概要へリダイレクト
+      alert("店舗を削除しました");
+      window.location.href = "/dashboard";
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "削除に失敗しました");
+      setDeleting(false);
+    }
   }
 
   if (loading) {
@@ -257,6 +293,28 @@ export default function ShopProfilePage() {
         </div>
       </div>
 
+      {/* 古物商許可番号セクション */}
+      <div className="rounded-lg border p-4 space-y-4">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+          <ShieldCheck className="h-4 w-4" />
+          古物商許可番号
+        </h3>
+
+        <div>
+          <Label className="text-sm mb-1.5 block">
+            古物商許可番号 <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            value={licenseNumber}
+            onChange={(e) => setLicenseNumber(e.target.value)}
+            placeholder="第○○○○○○○○○○○○号"
+          />
+          <p className="text-[11px] text-muted-foreground mt-1">
+            安全な取引のため、古物商許可番号の入力は必須です。公安委員会から交付された許可番号を入力してください。
+          </p>
+        </div>
+      </div>
+
       {/* 位置情報セクション */}
       <div className="rounded-lg border p-4 space-y-4">
         <h3 className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
@@ -286,7 +344,7 @@ export default function ShopProfilePage() {
           </div>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          💡 Google マップで店舗の位置を右クリック → 座標をコピーして貼り付けてください
+          Google マップで店舗の位置を右クリック → 座標をコピーして貼り付けてください
         </p>
       </div>
 
@@ -346,7 +404,7 @@ export default function ShopProfilePage() {
         {/* おすすめタグ */}
         <div>
           <p className="text-[11px] text-muted-foreground mb-2">
-            タップで追加 👇
+            タップで追加
           </p>
           <div className="flex flex-wrap gap-1.5">
             {SUGGESTED_SPECIALTIES.filter((s) => !specialty.includes(s)).map(
@@ -365,10 +423,10 @@ export default function ShopProfilePage() {
       </div>
 
       {/* 保存ボタン */}
-      <div className="flex justify-end pt-2 pb-8">
+      <div className="flex justify-end pt-2">
         <Button
           onClick={handleSave}
-          disabled={!name || !address || saving}
+          disabled={!name || !address || !licenseNumber.trim() || saving}
           className="min-w-[160px]"
         >
           {saving ? (
@@ -384,6 +442,40 @@ export default function ShopProfilePage() {
           )}
         </Button>
       </div>
+
+      {/* 店舗削除セクション */}
+      <Separator />
+      <div className="rounded-lg border border-destructive/30 p-4 space-y-3">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5 text-destructive">
+          <AlertTriangle className="h-4 w-4" />
+          危険な操作
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          店舗を削除すると、この店舗に紐づくメニューや予約データは非公開になります。この操作は取り消せません。
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+          onClick={handleDeleteShop}
+          disabled={deleting}
+        >
+          {deleting ? (
+            <>
+              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              削除中...
+            </>
+          ) : (
+            <>
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              この店舗を削除する
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* 下部余白 */}
+      <div className="pb-8" />
     </div>
   );
 }

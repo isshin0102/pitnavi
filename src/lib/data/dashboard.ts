@@ -23,7 +23,7 @@ export async function getMyShop(userId: string) {
   return data?.[0] ?? null;
 }
 
-/** ユーザーの全店舗を取得（複数店舗対応） */
+/** ユーザーの全店舗を取得（複数店舗対応、アクティブのみ） */
 export async function getMyShops(userId: string) {
   if (!isSupabaseConfigured()) return [];
 
@@ -33,6 +33,7 @@ export async function getMyShops(userId: string) {
     .from("shops")
     .select("*")
     .eq("owner_id", userId)
+    .eq("is_active", true)
     .order("created_at", { ascending: false });
   return data ?? [];
 }
@@ -46,6 +47,7 @@ export async function createShop(params: {
   description?: string;
   phone?: string;
   postal_code?: string;
+  license_number: string;
 }) {
   if (!isSupabaseConfigured()) return { id: `mock-${Date.now()}` };
 
@@ -72,6 +74,7 @@ export async function updateShop(
     phone?: string;
     postal_code?: string;
     specialty?: string[];
+    license_number?: string;
   }
 ) {
   if (!isSupabaseConfigured()) return { id: shopId, ...params };
@@ -86,6 +89,19 @@ export async function updateShop(
     .single();
   if (error) throw new Error(error.message);
   return data;
+}
+
+/** 店舗を論理削除する（is_active = false） */
+export async function deleteShop(shopId: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("shops")
+    .update({ is_active: false })
+    .eq("id", shopId);
+  if (error) throw new Error(error.message);
 }
 
 export async function addServiceMenu(params: {

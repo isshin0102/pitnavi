@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [description, setDescription] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
   const [lat, setLat] = useState("35.6894");
   const [lng, setLng] = useState("139.6917");
 
@@ -81,11 +82,12 @@ export default function DashboardPage() {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
 
-      // ★ 複数店舗に対応: .maybeSingle() → 全件取得
+      // ★ 複数店舗に対応: アクティブな店舗のみ取得
       const { data, error } = await supabase
         .from("shops")
         .select("*")
         .eq("owner_id", user.id)
+        .eq("is_active", true)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -121,6 +123,10 @@ export default function DashboardPage() {
 
   async function handleCreateShop() {
     if (!shopName || !address || !userId) return;
+    if (!licenseNumber.trim()) {
+      alert("古物商許可番号は必須入力です");
+      return;
+    }
     setSaving(true);
     try {
       const result = await createShop({
@@ -131,6 +137,7 @@ export default function DashboardPage() {
         longitude: parseFloat(lng),
         description: description || undefined,
         phone: phone || undefined,
+        license_number: licenseNumber.trim(),
       });
 
       const { createClient } = await import("@/lib/supabase/client");
@@ -153,6 +160,7 @@ export default function DashboardPage() {
       setAddress("");
       setPhone("");
       setDescription("");
+      setLicenseNumber("");
       setLat("35.6894");
       setLng("139.6917");
     } catch (e) {
@@ -215,6 +223,19 @@ export default function DashboardPage() {
             />
           </div>
           <div>
+            <Label className="text-sm mb-1 block">
+              古物商許可番号 <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              value={licenseNumber}
+              onChange={(e) => setLicenseNumber(e.target.value)}
+              placeholder="第○○○○○○○○○○○○号"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              安全な取引のため、古物商許可番号の入力は必須です
+            </p>
+          </div>
+          <div>
             <Label className="text-sm mb-1 block">紹介文（任意）</Label>
             <Textarea
               value={description}
@@ -253,7 +274,7 @@ export default function DashboardPage() {
           </Button>
           <Button
             onClick={handleCreateShop}
-            disabled={!shopName || !address || saving}
+            disabled={!shopName || !address || !licenseNumber.trim() || saving}
             className="w-full"
           >
             {saving ? "登録中..." : "店舗を登録する"}
