@@ -224,6 +224,8 @@ function ModalPhoto({ storagePath }: { storagePath: string }) {
     <img
       src={imgUrl}
       alt=""
+      loading="lazy"
+      decoding="async"
       className="h-full w-full object-contain"
       onError={handleError}
     />

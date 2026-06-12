@@ -141,6 +141,8 @@ function Lightbox({
       <img
         src={images[idx]}
         alt=""
+        loading="lazy"
+        decoding="async"
         className="max-h-[85vh] max-w-[95vw] object-contain rounded-lg"
         onClick={(e) => e.stopPropagation()}
       />
@@ -190,6 +192,8 @@ function WorkCard({
             <img
               src={work.before_image_url!}
               alt="Before"
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
             <span className="absolute bottom-0 left-0 bg-gradient-to-r from-black/70 to-transparent text-white text-[10px] font-bold px-2 py-1 uppercase tracking-wider">
@@ -203,6 +207,8 @@ function WorkCard({
             <img
               src={work.after_image_url!}
               alt="After"
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
             <span className="absolute bottom-0 left-0 bg-gradient-to-r from-primary/90 to-transparent text-white text-[10px] font-bold px-2 py-1 uppercase tracking-wider">
@@ -218,6 +224,8 @@ function WorkCard({
           <img
             src={images[0]}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
           {images.length > 1 && (

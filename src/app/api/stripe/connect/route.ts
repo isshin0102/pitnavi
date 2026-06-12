@@ -1,8 +1,19 @@
 import { NextResponse } from "next/server";
 import { getStripeServer } from "@/lib/stripe/server";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   try {
+    // 認証チェック: ログインユーザーのみ Stripe アカウント作成を許可
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "認証が必要です" },
+        { status: 401 }
+      );
+    }
+
     const { email } = await request.json();
     const stripe = getStripeServer();
 

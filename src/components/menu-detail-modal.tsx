@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import type { ServiceMenu, CarType } from "@/lib/types";
+import type { ServiceMenu } from "@/lib/types";
 import { SERVICE_CATEGORY_LABELS, CAR_TYPE_LABELS } from "@/lib/types";
 import { formatYen, calculateFeeBreakdown } from "@/lib/fee-calculator";
 import { Clock, Banknote, Car } from "lucide-react";

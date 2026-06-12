@@ -9,24 +9,14 @@ export async function getShops(): Promise<Shop[]> {
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
 
-    // まず is_active フィルタなしで件数を確認（デバッグ用）
-    const { count } = await supabase
-      .from("shops")
-      .select("*", { count: "exact", head: true });
-    console.log("[getShops] total shops in DB (RLS filtered):", count);
-
     const { data, error } = await supabase
       .from("shops")
       .select("*")
       .eq("is_active", true)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("[getShops] Supabase query error:", error.message, error.code);
-      throw error;
-    }
+    if (error) throw error;
 
-    console.log("[getShops] shops returned:", data?.length ?? 0, data?.map(s => s.name));
     return (data as Shop[]) ?? [];
   } catch (e) {
     console.error("[getShops] Supabase error, falling back to mock:", e);

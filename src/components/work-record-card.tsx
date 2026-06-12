@@ -177,6 +177,8 @@ function PhotoThumbnail({
     <img
       src={imgUrl}
       alt=""
+      loading="lazy"
+      decoding="async"
       className={`object-cover shrink-0 ${sizeClass}`}
       onError={handleImageError}
     />

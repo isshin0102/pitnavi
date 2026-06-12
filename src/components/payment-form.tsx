@@ -100,7 +100,7 @@ export function PaymentForm({
 
       // Stripe未設定の場合 → 予約のみ完了として処理
       if (data.error?.includes("not configured")) {
-        console.log("[PaymentForm] Stripe not configured, reservation only");
+        // Stripe未設定 → 予約のみ完了
         setStatus("success");
         setTimeout(onPaymentComplete, 1500);
         return;

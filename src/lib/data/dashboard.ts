@@ -223,17 +223,6 @@ export async function getMyWorkRecords(shopId: string): Promise<WorkRecord[]> {
     return [];
   }
 
-  // デバッグ: JOIN結果の写真データを確認
-  if (data && data.length > 0) {
-    const withPhotos = data.filter(
-      (r: Record<string, unknown>) =>
-        Array.isArray(r.work_record_photos) && (r.work_record_photos as unknown[]).length > 0
-    );
-    console.log(
-      `[getMyWorkRecords] ${data.length}件中 ${withPhotos.length}件に写真あり`
-    );
-  }
-
   return (data as WorkRecord[]) ?? [];
 }
 
