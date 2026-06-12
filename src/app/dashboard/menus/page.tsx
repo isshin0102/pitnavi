@@ -9,6 +9,7 @@ import {
   Store,
   Clock,
 } from "lucide-react";
+import { MenuDetailModal } from "@/components/menu-detail-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,6 +55,7 @@ export default function MenusPage() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [detailMenu, setDetailMenu] = useState<ServiceMenu | null>(null);
   const [category, setCategory] = useState<ServiceCategory>("tire_change");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -375,6 +377,7 @@ export default function MenusPage() {
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-muted-foreground">
               「{selectedShopName}」のメニュー（{menus.length}件）
+              <span className="ml-2 text-[10px] text-primary">※タップで詳細表示</span>
             </p>
           </div>
           <div className="space-y-2">
@@ -383,7 +386,8 @@ export default function MenusPage() {
               return (
                 <div
                   key={menu.id}
-                  className="rounded-lg border p-3 relative group"
+                  className="rounded-lg border p-3 relative group cursor-pointer transition-all hover:shadow-md hover:bg-accent/30 active:scale-[0.99]"
+                  onClick={() => setDetailMenu(menu)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -429,7 +433,7 @@ export default function MenusPage() {
 
                   {/* 削除ボタン */}
                   <button
-                    onClick={() => handleDelete(menu.id)}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(menu.id); }}
                     disabled={deletingId === menu.id}
                     className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
                     title="削除"
@@ -446,6 +450,14 @@ export default function MenusPage() {
           </div>
         </>
       )}
+
+      {/* メニュー詳細モーダル */}
+      <MenuDetailModal
+        menu={detailMenu}
+        open={!!detailMenu}
+        onOpenChange={(open) => { if (!open) setDetailMenu(null); }}
+        showFeeBreakdown
+      />
     </div>
   );
 }
