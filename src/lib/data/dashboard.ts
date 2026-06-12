@@ -214,7 +214,7 @@ export async function getMyWorkRecords(shopId: string): Promise<WorkRecord[]> {
   const supabase = createClient();
   const { data } = await supabase
     .from("work_records")
-    .select("*")
+    .select("*, work_record_photos(id, storage_path, display_order)")
     .eq("shop_id", shopId)
     .order("created_at", { ascending: false });
   return (data as WorkRecord[]) ?? [];

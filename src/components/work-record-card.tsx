@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -9,16 +12,41 @@ import { Badge } from "@/components/ui/badge";
 import type { WorkRecord } from "@/lib/types";
 import { SERVICE_CATEGORY_LABELS, CAR_TYPE_LABELS } from "@/lib/types";
 import { formatYen } from "@/lib/fee-calculator";
-import { Clock, Banknote, Car } from "lucide-react";
+import { getStoragePublicUrl } from "@/lib/supabase/helpers";
+import { Clock, Banknote, ImageIcon } from "lucide-react";
 
 interface WorkRecordCardProps {
   record: WorkRecord;
 }
 
 export function WorkRecordCard({ record }: WorkRecordCardProps) {
+  const photos = (record.work_record_photos ?? []).sort(
+    (a, b) => a.display_order - b.display_order
+  );
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="overflow-hidden">
+      {/* 写真セクション */}
+      {photos.length > 0 ? (
+        <div className="flex gap-0.5 overflow-x-auto bg-muted">
+          {photos.map((photo) => (
+            <PhotoThumbnail
+              key={photo.id}
+              storagePath={photo.storage_path}
+              isSingle={photos.length === 1}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-24 bg-muted/50">
+          <div className="flex flex-col items-center gap-1 text-muted-foreground/40">
+            <ImageIcon className="h-6 w-6" />
+            <span className="text-[10px]">写真なし</span>
+          </div>
+        </div>
+      )}
+
+      <CardHeader className="pb-2 pt-3">
         <div className="flex items-center gap-2 mb-1">
           <Badge variant="secondary" className="text-[10px]">
             {SERVICE_CATEGORY_LABELS[record.category]}
@@ -26,6 +54,11 @@ export function WorkRecordCard({ record }: WorkRecordCardProps) {
           <Badge variant="outline" className="text-[10px]">
             {CAR_TYPE_LABELS[record.car_type]}
           </Badge>
+          {photos.length > 0 && (
+            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+              {photos.length}枚
+            </Badge>
+          )}
         </div>
         <CardTitle className="text-sm">{record.title}</CardTitle>
         {record.description && (
@@ -50,5 +83,40 @@ export function WorkRecordCard({ record }: WorkRecordCardProps) {
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+/** 写真サムネイル（読み込み失敗時のフォールバック付き） */
+function PhotoThumbnail({
+  storagePath,
+  isSingle,
+}: {
+  storagePath: string;
+  isSingle: boolean;
+}) {
+  const [error, setError] = useState(false);
+  const url = getStoragePublicUrl("work-photos", storagePath);
+
+  if (error || !url) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-muted shrink-0 ${
+          isSingle ? "w-full h-40" : "w-32 h-24"
+        }`}
+      >
+        <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={url}
+      alt=""
+      className={`object-cover shrink-0 ${
+        isSingle ? "w-full h-40" : "w-32 h-24"
+      }`}
+      onError={() => setError(true)}
+    />
   );
 }

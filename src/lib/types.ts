@@ -56,6 +56,8 @@ export interface WorkRecord {
   labor_cost: number;
   duration_minutes: number;
   created_at: string;
+  /** JOINで取得される写真データ */
+  work_record_photos?: WorkRecordPhoto[];
 }
 
 export interface WorkRecordPhoto {
