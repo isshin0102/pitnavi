@@ -9,6 +9,10 @@ import {
   UtensilsCrossed,
   ClipboardList,
   MapPin,
+  Trash2,
+  CheckCircle,
+  Phone,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Card,
@@ -24,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { isSupabaseConfigured } from "@/lib/supabase/helpers";
 import { getCurrentUser } from "@/lib/data/auth";
-import { createShop, getMyMenus, getMyWorkRecords } from "@/lib/data/dashboard";
+import { createShop, deleteShop, getMyMenus, getMyWorkRecords } from "@/lib/data/dashboard";
 import type { Shop } from "@/lib/types";
 
 export default function DashboardPage() {
@@ -36,6 +40,9 @@ export default function DashboardPage() {
   const [saving, setSaving] = useState(false);
   const [menuCount, setMenuCount] = useState(0);
   const [recordCount, setRecordCount] = useState(0);
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState("");
 
   const [shopName, setShopName] = useState("");
   const [address, setAddress] = useState("");
@@ -169,6 +176,40 @@ export default function DashboardPage() {
     setSaving(false);
   }
 
+  async function handleDeleteShop(shop: Shop) {
+    const confirmed = confirm(
+      `本当に「${shop.name}」を削除しますか？この操作は取り消せません。`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(shop.id);
+    try {
+      await deleteShop(shop.id);
+
+      // ステートから削除した店舗を除外
+      const remaining = shops.filter((s) => s.id !== shop.id);
+      setShops(remaining);
+
+      // 選択中の店舗が削除された場合、次の店舗を選択
+      if (selectedShop?.id === shop.id) {
+        if (remaining.length > 0) {
+          await handleSelectShop(remaining[0]);
+        } else {
+          setSelectedShop(null);
+          setMenuCount(0);
+          setRecordCount(0);
+          setShowForm(true);
+        }
+      }
+
+      setDeleteSuccess(`「${shop.name}」を削除しました`);
+      setTimeout(() => setDeleteSuccess(""), 3000);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "削除に失敗しました");
+    }
+    setDeletingId(null);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
@@ -287,6 +328,14 @@ export default function DashboardPage() {
   // メインダッシュボード
   return (
     <div className="space-y-6">
+      {/* 削除成功メッセージ */}
+      {deleteSuccess && (
+        <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+          <CheckCircle className="h-4 w-4 shrink-0" />
+          {deleteSuccess}
+        </div>
+      )}
+
       {/* 店舗一覧（複数対応） */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -307,24 +356,80 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        {/* 複数店舗のタブ風切り替え */}
-        {shops.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
-            {shops.map((s) => (
-              <button
+        {/* 店舗カード一覧 — 選択＋削除対応 */}
+        <div className="space-y-2">
+          {shops.map((s) => {
+            const isSelected = selectedShop?.id === s.id;
+            const isDeleting = deletingId === s.id;
+            return (
+              <div
                 key={s.id}
-                onClick={() => handleSelectShop(s)}
-                className={`shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  selectedShop?.id === s.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background hover:bg-accent border-border"
+                className={`rounded-lg border p-3 transition-colors cursor-pointer ${
+                  isSelected
+                    ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                    : "hover:bg-accent"
                 }`}
+                onClick={() => handleSelectShop(s)}
               >
-                {s.name}
-              </button>
-            ))}
-          </div>
-        )}
+                <div className="flex items-center justify-between gap-3">
+                  {/* 店舗情報 */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm truncate">
+                        {s.name}
+                      </span>
+                      {isSelected && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] shrink-0"
+                        >
+                          選択中
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                      {s.address && (
+                        <span className="flex items-center gap-0.5 truncate">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          {s.address}
+                        </span>
+                      )}
+                      {s.phone && (
+                        <span className="flex items-center gap-0.5 shrink-0">
+                          <Phone className="h-3 w-3" />
+                          {s.phone}
+                        </span>
+                      )}
+                    </div>
+                    {s.license_number && (
+                      <div className="flex items-center gap-0.5 mt-0.5 text-[10px] text-muted-foreground">
+                        <ShieldCheck className="h-3 w-3" />
+                        {s.license_number}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 削除ボタン */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // カード選択を防止
+                      handleDeleteShop(s);
+                    }}
+                    disabled={isDeleting}
+                    className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                    title={`「${s.name}」を削除`}
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* 選択中の店舗の詳細 */}
