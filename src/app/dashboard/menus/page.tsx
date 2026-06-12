@@ -1,7 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  Plus,
+  Trash2,
+  Loader2,
+  AlertTriangle,
+  Store,
+  Clock,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,19 +21,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import type { ServiceCategory, ServiceMenu } from "@/lib/types";
-import { SERVICE_CATEGORY_LABELS, CAR_TYPE_LABELS } from "@/lib/types";
+import type { ServiceCategory, ServiceMenu, Shop } from "@/lib/types";
+import { SERVICE_CATEGORY_LABELS } from "@/lib/types";
 import { formatYen } from "@/lib/fee-calculator";
 import { isSupabaseConfigured } from "@/lib/supabase/helpers";
 import { getCurrentUser } from "@/lib/data/auth";
 import {
   addServiceMenu,
-  getAllMyMenus,
+  getMyMenus,
   getMyShops,
   deleteServiceMenu,
 } from "@/lib/data/dashboard";
 import { MOCK_SERVICE_MENUS } from "@/lib/mock-data";
-import { Clock } from "lucide-react";
+import { MOCK_SHOPS } from "@/lib/mock-data";
 
 /** 車検カテゴリ選択時のテンプレート */
 const INSPECTION_TEMPLATE = {
@@ -39,10 +46,11 @@ const INSPECTION_TEMPLATE = {
 };
 
 export default function MenusPage() {
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [menus, setMenus] = useState<ServiceMenu[]>([]);
-  const [shopIds, setShopIds] = useState<string[]>([]);
-  const [primaryShopId, setPrimaryShopId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [menusLoading, setMenusLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -53,12 +61,25 @@ export default function MenusPage() {
   const [priceStandard, setPriceStandard] = useState("");
   const [minutes, setMinutes] = useState("");
 
+  /** 指定店舗のメニューを取得 */
+  const fetchMenusForShop = useCallback(async (shopId: string) => {
+    setMenusLoading(true);
+    try {
+      const data = await getMyMenus(shopId);
+      setMenus(data);
+    } catch (e) {
+      console.error("[MenusPage] fetchMenus error:", e);
+      setMenus([]);
+    }
+    setMenusLoading(false);
+  }, []);
+
   useEffect(() => {
     (async () => {
       if (!isSupabaseConfigured()) {
+        setShops(MOCK_SHOPS);
+        setSelectedShopId("shop-1");
         setMenus(MOCK_SERVICE_MENUS.filter((m) => m.shop_id === "shop-1"));
-        setPrimaryShopId("shop-1");
-        setShopIds(["shop-1"]);
         setLoading(false);
         return;
       }
@@ -69,29 +90,28 @@ export default function MenusPage() {
         return;
       }
 
-      // 全店舗を取得
-      const shops = await getMyShops(user.id);
-      if (shops.length === 0) {
-        setLoading(false);
-        return;
+      const myShops = (await getMyShops(user.id)) as Shop[];
+      setShops(myShops);
+
+      if (myShops.length > 0) {
+        const firstId = myShops[0].id;
+        setSelectedShopId(firstId);
+        await fetchMenusForShop(firstId);
       }
 
-      const ids = shops.map((s: { id: string }) => s.id);
-      setShopIds(ids);
-      setPrimaryShopId(ids[0]);
-
-      // 全店舗のメニューをまとめて取得
-      const data = await getAllMyMenus(ids);
-      setMenus(data);
       setLoading(false);
     })();
-  }, []);
+  }, [fetchMenusForShop]);
+
+  /** 店舗切り替え */
+  async function handleShopChange(shopId: string) {
+    setSelectedShopId(shopId);
+    await fetchMenusForShop(shopId);
+  }
 
   /** カテゴリ変更時にテンプレート適用 */
   function handleCategoryChange(newCategory: ServiceCategory) {
     setCategory(newCategory);
-
-    // 車検を選んだ時、フォームが空ならテンプレートを自動入力
     if (newCategory === "inspection" && !name && !description) {
       setName(INSPECTION_TEMPLATE.name);
       setDescription(INSPECTION_TEMPLATE.description);
@@ -102,12 +122,12 @@ export default function MenusPage() {
   }
 
   async function handleAdd() {
-    if (!name || !priceLight || !priceStandard || !primaryShopId) return;
+    if (!name || !priceLight || !priceStandard || !selectedShopId) return;
     setSaving(true);
 
     try {
       const newMenu = await addServiceMenu({
-        shop_id: primaryShopId,
+        shop_id: selectedShopId,
         category,
         name,
         description: description || undefined,
@@ -116,7 +136,7 @@ export default function MenusPage() {
         estimated_minutes: minutes ? parseInt(minutes, 10) : undefined,
       });
 
-      setMenus([...menus, newMenu as ServiceMenu]);
+      setMenus((prev) => [...prev, newMenu as ServiceMenu]);
       resetForm();
       setOpen(false);
     } catch (e) {
@@ -130,7 +150,7 @@ export default function MenusPage() {
     setDeletingId(menuId);
     try {
       await deleteServiceMenu(menuId);
-      setMenus(menus.filter((m) => m.id !== menuId));
+      setMenus((prev) => prev.filter((m) => m.id !== menuId));
     } catch (e) {
       alert(e instanceof Error ? e.message : "削除に失敗しました");
     }
@@ -146,6 +166,10 @@ export default function MenusPage() {
     setCategory("tire_change");
   }
 
+  /** 選択中の店舗名を取得 */
+  const selectedShopName =
+    shops.find((s) => s.id === selectedShopId)?.name ?? "";
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
@@ -155,7 +179,7 @@ export default function MenusPage() {
     );
   }
 
-  if (shopIds.length === 0) {
+  if (shops.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-8 text-center">
         まず「概要」ページで店舗を登録してください
@@ -165,6 +189,7 @@ export default function MenusPage() {
 
   return (
     <div>
+      {/* ヘッダー：タイトル + メニュー追加ボタン */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">メニュー管理</h2>
         <Dialog
@@ -183,6 +208,15 @@ export default function MenusPage() {
               <DialogTitle>新しいメニューを追加</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
+              {/* 追加先の店舗表示 */}
+              <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+                <p className="text-xs text-muted-foreground">追加先の店舗</p>
+                <p className="text-sm font-medium flex items-center gap-1.5 mt-0.5">
+                  <Store className="h-3.5 w-3.5 text-primary" />
+                  {selectedShopName}
+                </p>
+              </div>
+
               <div>
                 <Label className="text-sm mb-1 block">カテゴリ</Label>
                 <select
@@ -290,75 +324,127 @@ export default function MenusPage() {
         </Dialog>
       </div>
 
-      {menus.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">
-          メニューがまだ登録されていません
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {menus.map((menu) => {
-            const isInspection = menu.category === "inspection";
-            return (
-              <div
-                key={menu.id}
-                className="rounded-lg border p-3 relative group"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[10px] shrink-0">
-                        {SERVICE_CATEGORY_LABELS[menu.category]}
-                      </Badge>
-                      <span className="font-medium text-sm truncate">
-                        {menu.name}
-                      </span>
-                    </div>
-                    {menu.description && (
-                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">
-                        {menu.description}
-                      </p>
-                    )}
-                    {menu.estimated_minutes && (
-                      <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        約{menu.estimated_minutes}分
-                      </div>
-                    )}
-                    {isInspection && (
-                      <p className="mt-1 text-[10px] text-orange-600">
-                        ※料金は目安です。追加整備費用が発生する場合があります
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-xs text-muted-foreground mb-0.5">
-                      軽: {formatYen(menu.price_light)}
-                      {isInspection && "〜"}
-                    </div>
-                    <div className="font-bold text-sm">
-                      普: {formatYen(menu.price_standard)}
-                      {isInspection && "〜"}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 削除ボタン */}
-                <button
-                  onClick={() => handleDelete(menu.id)}
-                  disabled={deletingId === menu.id}
-                  className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="削除"
-                >
-                  {deletingId === menu.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              </div>
-            );
-          })}
+      {/* 店舗セレクター */}
+      {shops.length > 1 ? (
+        <div className="mb-4">
+          <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
+            <Store className="h-3 w-3" />
+            メニューを表示・追加する店舗を選択
+          </Label>
+          <select
+            value={selectedShopId ?? ""}
+            onChange={(e) => handleShopChange(e.target.value)}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm font-medium"
+          >
+            {shops.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {s.address ? ` — ${s.address}` : ""}
+              </option>
+            ))}
+          </select>
         </div>
+      ) : (
+        /* 1店舗のみの場合は店舗名バッジで表示 */
+        <div className="mb-4 flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
+          <Store className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-sm font-medium">{selectedShopName}</span>
+          <Badge variant="secondary" className="text-[10px]">
+            {menus.length}件のメニュー
+          </Badge>
+        </div>
+      )}
+
+      {/* メニュー一覧 */}
+      {menusLoading ? (
+        <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          メニューを読み込み中...
+        </div>
+      ) : menus.length === 0 ? (
+        <div className="py-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            「{selectedShopName}」にはまだメニューが登録されていません
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            右上の「メニュー追加」から追加してください
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted-foreground">
+              「{selectedShopName}」のメニュー（{menus.length}件）
+            </p>
+          </div>
+          <div className="space-y-2">
+            {menus.map((menu) => {
+              const isInspection = menu.category === "inspection";
+              return (
+                <div
+                  key={menu.id}
+                  className="rounded-lg border p-3 relative group"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] shrink-0"
+                        >
+                          {SERVICE_CATEGORY_LABELS[menu.category]}
+                        </Badge>
+                        <span className="font-medium text-sm truncate">
+                          {menu.name}
+                        </span>
+                      </div>
+                      {menu.description && (
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">
+                          {menu.description}
+                        </p>
+                      )}
+                      {menu.estimated_minutes && (
+                        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          約{menu.estimated_minutes}分
+                        </div>
+                      )}
+                      {isInspection && (
+                        <p className="mt-1 text-[10px] text-orange-600">
+                          ※料金は目安です。追加整備費用が発生する場合があります
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-xs text-muted-foreground mb-0.5">
+                        軽: {formatYen(menu.price_light)}
+                        {isInspection && "〜"}
+                      </div>
+                      <div className="font-bold text-sm">
+                        普: {formatYen(menu.price_standard)}
+                        {isInspection && "〜"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 削除ボタン */}
+                  <button
+                    onClick={() => handleDelete(menu.id)}
+                    disabled={deletingId === menu.id}
+                    className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="削除"
+                  >
+                    {deletingId === menu.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
