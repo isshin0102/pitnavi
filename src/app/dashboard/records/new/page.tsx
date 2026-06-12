@@ -1,21 +1,35 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft, CheckCircle, Loader2, Store } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ShopSelector } from "@/components/shop-selector";
 import { PhotoUpload, type UploadedPhoto } from "@/components/photo-upload";
-import type { ServiceCategory, CarType } from "@/lib/types";
+import type { ServiceCategory, CarType, Shop } from "@/lib/types";
 import { SERVICE_CATEGORY_LABELS, CAR_TYPE_LABELS } from "@/lib/types";
 import { isSupabaseConfigured } from "@/lib/supabase/helpers";
 import { getCurrentUser } from "@/lib/data/auth";
-import { addWorkRecord, addWorkRecordPhoto } from "@/lib/data/dashboard";
+import { getMyShops, addWorkRecord, addWorkRecordPhoto } from "@/lib/data/dashboard";
 
 export default function NewRecordPage() {
-  const [shopId, setShopId] = useState<string | null>(null);
+  return (
+    <Suspense>
+      <NewRecordForm />
+    </Suspense>
+  );
+}
+
+function NewRecordForm() {
+  const searchParams = useSearchParams();
+  const initialShopId = searchParams.get("shopId");
+
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -30,7 +44,7 @@ export default function NewRecordPage() {
   useEffect(() => {
     (async () => {
       if (!isSupabaseConfigured()) {
-        setShopId("mock-shop");
+        setSelectedShopId("mock-shop");
         setLoading(false);
         return;
       }
@@ -38,27 +52,27 @@ export default function NewRecordPage() {
       const user = await getCurrentUser();
       if (!user) { setLoading(false); return; }
 
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data: shops } = await supabase
-        .from("shops")
-        .select("id")
-        .eq("owner_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
+      const myShops = (await getMyShops(user.id)) as Shop[];
+      setShops(myShops);
 
-      setShopId(shops?.[0]?.id ?? null);
+      if (myShops.length > 0) {
+        // URLパラメータの店舗IDが有効ならそれを使う
+        const validId = myShops.find((s) => s.id === initialShopId)?.id;
+        setSelectedShopId(validId ?? myShops[0].id);
+      }
       setLoading(false);
     })();
-  }, []);
+  }, [initialShopId]);
+
+  const selectedShopName = shops.find((s) => s.id === selectedShopId)?.name ?? "";
 
   async function handleSubmit() {
-    if (!title || !laborCost || !duration || !shopId) return;
+    if (!title || !laborCost || !duration || !selectedShopId) return;
     setSaving(true);
 
     try {
       const record = await addWorkRecord({
-        shop_id: shopId,
+        shop_id: selectedShopId,
         title,
         description: description || undefined,
         category,
@@ -106,7 +120,7 @@ export default function NewRecordPage() {
     );
   }
 
-  if (!shopId) {
+  if (shops.length === 0 && isSupabaseConfigured()) {
     return (
       <p className="text-sm text-muted-foreground py-8 text-center">
         まず「概要」ページで店舗を登録してください
@@ -126,6 +140,14 @@ export default function NewRecordPage() {
       <h2 className="text-lg font-semibold mb-4">作業実績を投稿</h2>
 
       <div className="space-y-4 max-w-lg">
+        {/* 投稿先店舗セレクター */}
+        <ShopSelector
+          shops={shops}
+          selectedShopId={selectedShopId}
+          onSelect={setSelectedShopId}
+          label="実績を投稿する店舗を選択"
+        />
+
         <div>
           <Label className="text-sm mb-1 block">カテゴリ</Label>
           <select
@@ -182,7 +204,7 @@ export default function NewRecordPage() {
           <PhotoUpload onPhotosChange={setPhotos} maxPhotos={5} />
         </div>
 
-        <Button onClick={handleSubmit} disabled={!title || !laborCost || !duration || saving} className="w-full">
+        <Button onClick={handleSubmit} disabled={!title || !laborCost || !duration || !selectedShopId || saving} className="w-full">
           {saving ? "投稿中..." : "投稿する"}
         </Button>
       </div>

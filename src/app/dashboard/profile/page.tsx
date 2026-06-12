@@ -23,9 +23,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { ShopSelector } from "@/components/shop-selector";
 import { isSupabaseConfigured } from "@/lib/supabase/helpers";
 import { getCurrentUser } from "@/lib/data/auth";
-import { updateShop, deleteShop } from "@/lib/data/dashboard";
+import { getMyShops, updateShop, deleteShop } from "@/lib/data/dashboard";
 import type { Shop } from "@/lib/types";
 
 /* ---------- おすすめタグ ---------- */
@@ -54,6 +55,7 @@ const SUGGESTED_SPECIALTIES = [
 
 export default function ShopProfilePage() {
   const router = useRouter();
+  const [shops, setShops] = useState<Shop[]>([]);
   const [shop, setShop] = useState<Shop | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -93,6 +95,7 @@ export default function ShopProfilePage() {
           created_at: "",
           updated_at: "",
         };
+        setShops([mock]);
         setShop(mock);
         populateForm(mock);
         setLoading(false);
@@ -105,25 +108,25 @@ export default function ShopProfilePage() {
         return;
       }
 
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data: shops } = await supabase
-        .from("shops")
-        .select("*")
-        .eq("owner_id", user.id)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1);
+      const myShops = (await getMyShops(user.id)) as Shop[];
+      setShops(myShops);
 
-      const firstShop = shops?.[0] ?? null;
-      if (firstShop) {
-        const shopData = firstShop as Shop;
-        setShop(shopData);
-        populateForm(shopData);
+      if (myShops.length > 0) {
+        setShop(myShops[0]);
+        populateForm(myShops[0]);
       }
       setLoading(false);
     })();
   }, []);
+
+  function handleShopChange(shopId: string) {
+    const selected = shops.find((s) => s.id === shopId);
+    if (selected) {
+      setShop(selected);
+      populateForm(selected);
+      setSaved(false);
+    }
+  }
 
   function populateForm(s: Shop) {
     setName(s.name || "");
@@ -240,6 +243,14 @@ export default function ShopProfilePage() {
           </Badge>
         )}
       </div>
+
+      {/* 店舗セレクター */}
+      <ShopSelector
+        shops={shops}
+        selectedShopId={shop.id}
+        onSelect={handleShopChange}
+        label="編集する店舗を選択"
+      />
 
       {/* 基本情報セクション */}
       <div className="rounded-lg border p-4 space-y-4">

@@ -16,6 +16,7 @@ import {
   Ban,
   Wrench,
   HandCoins,
+  Store,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,20 +35,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ShopSelector } from "@/components/shop-selector";
 import {
   RESERVATION_STATUS_LABELS,
   CAR_TYPE_LABELS,
   ADVANCE_BUTTON_LABELS,
   NEXT_STATUS_MAP,
 } from "@/lib/types";
-import type { ReservationStatus } from "@/lib/types";
+import type { ReservationStatus, Shop } from "@/lib/types";
 import { formatYen } from "@/lib/fee-calculator";
 import { isSupabaseConfigured } from "@/lib/supabase/helpers";
 import { useReservationRealtime } from "@/lib/supabase/use-realtime";
 import { getCurrentUser } from "@/lib/data/auth";
 import {
+  getMyShops,
   getMyReservations,
-  getAllMyReservations,
   advanceReservationStatus,
   cancelReservation,
 } from "@/lib/data/dashboard";
@@ -162,11 +164,13 @@ const FILTER_TABS: { label: string; statuses: ReservationStatus[] }[] = [
 /* ---------- メインコンポーネント ---------- */
 
 export default function ReservationsPage() {
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [reservations, setReservations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState(0);
   const [updating, setUpdating] = useState<string | null>(null);
-  const [shopId, setShopId] = useState<string | null>(null);
 
   // 見積ダイアログ
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
@@ -175,14 +179,13 @@ export default function ReservationsPage() {
   const [workMemo, setWorkMemo] = useState("");
 
   useEffect(() => {
-    loadReservations();
+    loadInitial();
   }, []);
 
   /* ---------- Supabase Realtime: 新規予約の自動追加 ---------- */
   useReservationRealtime(
-    shopId ? `shop_id=eq.${shopId}` : null,
+    selectedShopId ? `shop_id=eq.${selectedShopId}` : null,
     (updatedRow) => {
-      // 他端末でのステータス変更を反映
       setReservations((prev) =>
         prev.map((r) =>
           r.id === updatedRow.id ? { ...r, ...updatedRow } : r
@@ -190,12 +193,11 @@ export default function ReservationsPage() {
       );
     },
     (newRow) => {
-      // 新規予約が入ったら先頭に追加
       setReservations((prev) => [newRow, ...prev]);
     }
   );
 
-  async function loadReservations() {
+  async function loadInitial() {
     if (!isSupabaseConfigured()) {
       setReservations(MOCK_RESERVATIONS);
       setLoading(false);
@@ -208,26 +210,32 @@ export default function ReservationsPage() {
       return;
     }
 
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { data: shops, error: shopErr } = await supabase
-      .from("shops")
-      .select("id")
-      .eq("owner_id", user.id)
-      .order("created_at", { ascending: false });
+    const myShops = (await getMyShops(user.id)) as Shop[];
+    setShops(myShops);
 
-    if (shopErr) {
-      console.error("[Reservations] shop query error:", shopErr);
-    }
-
-    if (shops && shops.length > 0) {
-      setShopId(shops[0].id);
-      // 全店舗の予約をまとめて取得
-      const shopIds = shops.map((s: { id: string }) => s.id);
-      const data = await getAllMyReservations(shopIds);
-      setReservations(data);
+    if (myShops.length > 0) {
+      const firstId = myShops[0].id;
+      setSelectedShopId(firstId);
+      await fetchReservationsForShop(firstId);
     }
     setLoading(false);
+  }
+
+  async function fetchReservationsForShop(shopId: string) {
+    setReservationsLoading(true);
+    try {
+      const data = await getMyReservations(shopId);
+      setReservations(data);
+    } catch (e) {
+      console.error("[Reservations] fetch error:", e);
+      setReservations([]);
+    }
+    setReservationsLoading(false);
+  }
+
+  async function handleShopChange(shopId: string) {
+    setSelectedShopId(shopId);
+    await fetchReservationsForShop(shopId);
   }
 
   async function handleAdvance(reservation: any) {
@@ -328,10 +336,26 @@ export default function ReservationsPage() {
     );
   }
 
+  const selectedShopName = shops.find((s) => s.id === selectedShopId)?.name ?? "";
+
   return (
     <div>
       <h2 className="text-lg font-semibold mb-4">予約管理</h2>
 
+      <ShopSelector
+        shops={shops}
+        selectedShopId={selectedShopId}
+        onSelect={handleShopChange}
+        label="予約を表示する店舗を選択"
+        subtitle={`${reservations.length}件の予約`}
+      />
+
+      {reservationsLoading ? (
+        <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />予約を読み込み中...
+        </div>
+      ) : (
+        <>
       {/* フィルタータブ */}
       <div className="flex gap-1 mb-4 overflow-x-auto">
         {FILTER_TABS.map((tab, i) => {
@@ -480,6 +504,9 @@ export default function ReservationsPage() {
             );
           })}
         </div>
+      )}
+
+        </>
       )}
 
       {/* 見積提示ダイアログ */}
