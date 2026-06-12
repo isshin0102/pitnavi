@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -86,7 +86,7 @@ export function WorkRecordCard({ record }: WorkRecordCardProps) {
   );
 }
 
-/** 写真サムネイル（読み込み失敗時のフォールバック付き） */
+/** 写真サムネイル（公開URL → signed URL フォールバック付き） */
 function PhotoThumbnail({
   storagePath,
   isSingle,
@@ -94,16 +94,64 @@ function PhotoThumbnail({
   storagePath: string;
   isSingle: boolean;
 }) {
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
-  const url = getStoragePublicUrl("work-photos", storagePath);
 
-  if (error || !url) {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveUrl() {
+      // 1. まず公開URLを試す（バケットが public なら即表示可能）
+      const publicUrl = getStoragePublicUrl("work-photos", storagePath);
+      if (publicUrl) {
+        setImgUrl(publicUrl);
+        return;
+      }
+
+      // 2. 環境変数が未設定の場合は signed URL を試す
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data } = await supabase.storage
+          .from("work-photos")
+          .createSignedUrl(storagePath, 3600); // 1時間有効
+        if (!cancelled && data?.signedUrl) {
+          setImgUrl(data.signedUrl);
+        }
+      } catch {
+        if (!cancelled) setError(true);
+      }
+    }
+
+    resolveUrl();
+    return () => { cancelled = true; };
+  }, [storagePath]);
+
+  /** 公開URLが403/404の場合に signed URL にフォールバック */
+  async function handleImageError() {
+    if (error) return; // 2回目のエラーは無視
+
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data } = await supabase.storage
+        .from("work-photos")
+        .createSignedUrl(storagePath, 3600);
+      if (data?.signedUrl) {
+        setImgUrl(data.signedUrl);
+        return;
+      }
+    } catch {
+      // signed URL も失敗
+    }
+    setError(true);
+  }
+
+  const sizeClass = isSingle ? "w-full h-40" : "w-32 h-24";
+
+  if (error || !imgUrl) {
     return (
-      <div
-        className={`flex items-center justify-center bg-muted shrink-0 ${
-          isSingle ? "w-full h-40" : "w-32 h-24"
-        }`}
-      >
+      <div className={`flex items-center justify-center bg-muted shrink-0 ${sizeClass}`}>
         <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
       </div>
     );
@@ -111,12 +159,10 @@ function PhotoThumbnail({
 
   return (
     <img
-      src={url}
+      src={imgUrl}
       alt=""
-      className={`object-cover shrink-0 ${
-        isSingle ? "w-full h-40" : "w-32 h-24"
-      }`}
-      onError={() => setError(true)}
+      className={`object-cover shrink-0 ${sizeClass}`}
+      onError={handleImageError}
     />
   );
 }

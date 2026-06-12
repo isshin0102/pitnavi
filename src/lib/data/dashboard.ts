@@ -212,11 +212,28 @@ export async function getMyWorkRecords(shopId: string): Promise<WorkRecord[]> {
 
   const { createClient } = await import("@/lib/supabase/client");
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("work_records")
     .select("*, work_record_photos(id, storage_path, display_order)")
     .eq("shop_id", shopId)
     .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getMyWorkRecords] query error:", error);
+    return [];
+  }
+
+  // デバッグ: JOIN結果の写真データを確認
+  if (data && data.length > 0) {
+    const withPhotos = data.filter(
+      (r: Record<string, unknown>) =>
+        Array.isArray(r.work_record_photos) && (r.work_record_photos as unknown[]).length > 0
+    );
+    console.log(
+      `[getMyWorkRecords] ${data.length}件中 ${withPhotos.length}件に写真あり`
+    );
+  }
+
   return (data as WorkRecord[]) ?? [];
 }
 
