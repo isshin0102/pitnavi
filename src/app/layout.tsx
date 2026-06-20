@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ピトナビ - 整備工場予約",
   description: "近くの整備工場をさがして、タイヤ交換・オイル交換・車検をかんたん予約",
+  verification: {
+    google: "CTctoqGMizmZ-S1OmMIFEN66mYKYbGJvYq0aLDRgXNA",
+  },
 };
 
 export default function RootLayout({
