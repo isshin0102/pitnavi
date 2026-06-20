@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email } = await request.json();
+    const { email, shopId } = await request.json();
     const stripe = getStripeServer();
 
     if (!stripe) {
@@ -24,26 +24,61 @@ export async function POST(request: Request) {
       );
     }
 
-    const account = await stripe.accounts.create({
-      type: "standard",
-      email,
-      country: "JP",
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-    });
+    let accountId: string;
+
+    if (shopId) {
+      const { data: shop } = await supabase
+        .from("shops")
+        .select("stripe_account_id")
+        .eq("id", shopId)
+        .eq("owner_id", user.id)
+        .single();
+
+      if (shop?.stripe_account_id) {
+        accountId = shop.stripe_account_id;
+      } else {
+        const account = await stripe.accounts.create({
+          type: "standard",
+          email: email || user.email,
+          country: "JP",
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+        });
+        accountId = account.id;
+      }
+    } else {
+      const account = await stripe.accounts.create({
+        type: "standard",
+        email: email || user.email,
+        country: "JP",
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+      });
+      accountId = account.id;
+    }
+
+    if (shopId) {
+      await supabase
+        .from("shops")
+        .update({ stripe_account_id: accountId })
+        .eq("id", shopId)
+        .eq("owner_id", user.id);
+    }
 
     const origin = new URL(request.url).origin;
     const accountLink = await stripe.accountLinks.create({
-      account: account.id,
+      account: accountId,
       return_url: `${origin}/dashboard?stripe=success`,
       refresh_url: `${origin}/dashboard?stripe=refresh`,
       type: "account_onboarding",
     });
 
     return NextResponse.json({
-      accountId: account.id,
+      accountId,
       onboardingUrl: accountLink.url,
     });
   } catch (error) {

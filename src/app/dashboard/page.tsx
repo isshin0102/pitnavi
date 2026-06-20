@@ -43,6 +43,7 @@ export default function DashboardPage() {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState("");
+  const [stripeConnecting, setStripeConnecting] = useState(false);
 
   const [shopName, setShopName] = useState("");
   const [address, setAddress] = useState("");
@@ -469,14 +470,59 @@ export default function DashboardPage() {
                   <CreditCard className="h-5 w-5" />
                   <CardTitle className="text-sm">Stripe Connect</CardTitle>
                 </div>
-                <Badge variant="secondary" className="text-[10px]">
-                  プロトタイプ
-                </Badge>
+                {selectedShop.stripe_onboarded ? (
+                  <Badge className="bg-green-100 text-green-800 text-[10px]">
+                    連携済み
+                  </Badge>
+                ) : selectedShop.stripe_account_id ? (
+                  <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-300">
+                    設定未完了
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-[10px]">
+                    未連携
+                  </Badge>
+                )}
               </div>
               <CardDescription className="text-xs">
-                本番環境ではStripeアカウント連携により自動決済が有効になります
+                {selectedShop.stripe_onboarded
+                  ? "Stripeアカウントが連携済みです。お客様からの決済を受け取れます"
+                  : "Stripeアカウントを連携すると、お客様からの決済を自動で受け取れます"}
               </CardDescription>
             </CardHeader>
+            {!selectedShop.stripe_onboarded && (
+              <CardContent>
+                <Button
+                  className="w-full"
+                  disabled={stripeConnecting}
+                  onClick={async () => {
+                    setStripeConnecting(true);
+                    try {
+                      const res = await fetch("/api/stripe/connect", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ shopId: selectedShop.id }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+                      window.location.href = data.onboardingUrl;
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : "エラーが発生しました");
+                      setStripeConnecting(false);
+                    }
+                  }}
+                >
+                  {stripeConnecting ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <CreditCard className="h-4 w-4 mr-2" />
+                  )}
+                  {selectedShop.stripe_account_id
+                    ? "Stripeの設定を続ける"
+                    : "Stripeと連携する"}
+                </Button>
+              </CardContent>
+            )}
           </Card>
         </>
       )}
