@@ -1,69 +1,30 @@
-import type { ServiceCategory, CarType } from "./types";
-
-type FeeKey = `${ServiceCategory}:${CarType}` | `${ServiceCategory}:*`;
-
-const PLATFORM_FEES: Record<string, number> = {
-  "tire_change:light": 800,
-  "tire_change:standard": 1500,
-  "oil_change:light": 550,
-  "oil_change:standard": 650,
-  "inspection:*": 4500,
-};
+const PLATFORM_FEE_RATE = 0.10;
 
 export interface FeeBreakdown {
   servicePrice: number;
   platformFee: number;
   shopPayout: number;
+  feeRate: number;
 }
 
-function buildKey(category: ServiceCategory, carType: CarType): FeeKey {
-  return `${category}:${carType}`;
-}
-
-function buildWildcardKey(category: ServiceCategory): FeeKey {
-  return `${category}:*`;
-}
-
-export function getPlatformFee(
-  category: ServiceCategory,
-  carType: CarType
-): number {
-  const exact = PLATFORM_FEES[buildKey(category, carType)];
-  if (exact !== undefined) return exact;
-
-  const wildcard = PLATFORM_FEES[buildWildcardKey(category)];
-  if (wildcard !== undefined) return wildcard;
-
-  return 0;
+export function calculatePlatformFee(amount: number): number {
+  return Math.floor(amount * PLATFORM_FEE_RATE);
 }
 
 export function calculateFeeBreakdown(
-  category: ServiceCategory,
-  carType: CarType,
+  _category: string,
+  _carType: string,
   servicePrice: number
 ): FeeBreakdown {
-  const platformFee = getPlatformFee(category, carType);
+  const platformFee = calculatePlatformFee(servicePrice);
   return {
     servicePrice,
     platformFee,
     shopPayout: servicePrice - platformFee,
+    feeRate: PLATFORM_FEE_RATE,
   };
 }
 
 export function formatYen(amount: number): string {
   return `¥${amount.toLocaleString("ja-JP")}`;
-}
-
-export function getAllFeeRules(): {
-  category: ServiceCategory;
-  carType: CarType | "*";
-  fee: number;
-}[] {
-  return Object.entries(PLATFORM_FEES).map(([key, fee]) => {
-    const [category, carType] = key.split(":") as [
-      ServiceCategory,
-      CarType | "*",
-    ];
-    return { category, carType, fee };
-  });
 }

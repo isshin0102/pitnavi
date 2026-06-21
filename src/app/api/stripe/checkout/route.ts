@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getStripeServer } from "@/lib/stripe/server";
 import { createClient } from "@/lib/supabase/server";
+import { calculatePlatformFee } from "@/lib/fee-calculator";
 
 export async function POST(request: Request) {
   try {
-    // 認証チェック
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -20,15 +20,22 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const {
-      reservationId,
-      shopId,
-      shopName,
-      menuName,
-      totalPrice,
-      platformFee,
-      origin,
-    } = body;
+    const { reservationId, shopId, shopName, menuName, totalPrice, origin } = body;
+
+    const { data: shop } = await supabase
+      .from("shops")
+      .select("stripe_account_id, stripe_onboarded")
+      .eq("id", shopId)
+      .single();
+
+    if (!shop?.stripe_account_id || !shop.stripe_onboarded) {
+      return NextResponse.json(
+        { error: "この店舗はまだStripe連携が完了していません" },
+        { status: 400 }
+      );
+    }
+
+    const platformFee = calculatePlatformFee(totalPrice);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -48,10 +55,17 @@ export async function POST(request: Request) {
       mode: "payment",
       success_url: `${origin}/reserve/${shopId}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/reserve/${shopId}?cancelled=true`,
+      payment_intent_data: {
+        application_fee_amount: platformFee,
+        transfer_data: {
+          destination: shop.stripe_account_id,
+        },
+      },
       metadata: {
         reservation_id: reservationId,
         shop_id: shopId,
         platform_fee: String(platformFee),
+        shop_payout: String(totalPrice - platformFee),
       },
     });
 

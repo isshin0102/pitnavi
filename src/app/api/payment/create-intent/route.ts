@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import type { ServiceCategory, CarType } from "@/lib/types";
-import { calculateFeeBreakdown } from "@/lib/fee-calculator";
+import { calculatePlatformFee } from "@/lib/fee-calculator";
 import { getStripeServer } from "@/lib/stripe/server";
 
 interface CreateIntentBody {
-  category: ServiceCategory;
-  carType: CarType;
   servicePrice: number;
   shopStripeAccountId: string;
   reservationId: string;
@@ -23,31 +20,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const breakdown = calculateFeeBreakdown(
-      body.category,
-      body.carType,
-      body.servicePrice
-    );
+    const platformFee = calculatePlatformFee(body.servicePrice);
+    const shopPayout = body.servicePrice - platformFee;
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: breakdown.servicePrice,
+      amount: body.servicePrice,
       currency: "jpy",
-      application_fee_amount: breakdown.platformFee,
+      application_fee_amount: platformFee,
       transfer_data: {
         destination: body.shopStripeAccountId,
       },
       metadata: {
         reservation_id: body.reservationId,
-        category: body.category,
-        car_type: body.carType,
-        platform_fee: String(breakdown.platformFee),
-        shop_payout: String(breakdown.shopPayout),
+        platform_fee: String(platformFee),
+        shop_payout: String(shopPayout),
       },
     });
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
-      breakdown,
+      platformFee,
+      shopPayout,
     });
   } catch (error) {
     const message =

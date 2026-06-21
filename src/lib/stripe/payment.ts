@@ -1,10 +1,7 @@
-import type { ServiceCategory, CarType } from "@/lib/types";
-import { calculateFeeBreakdown } from "@/lib/fee-calculator";
+import { calculatePlatformFee } from "@/lib/fee-calculator";
 import { getStripeServer } from "./server";
 
 export interface CreatePaymentParams {
-  category: ServiceCategory;
-  carType: CarType;
   servicePrice: number;
   shopStripeAccountId: string;
   reservationId: string;
@@ -17,25 +14,20 @@ export async function createPaymentIntent(params: CreatePaymentParams) {
     throw new Error("Stripe is not configured");
   }
 
-  const breakdown = calculateFeeBreakdown(
-    params.category,
-    params.carType,
-    params.servicePrice
-  );
+  const platformFee = calculatePlatformFee(params.servicePrice);
+  const shopPayout = params.servicePrice - platformFee;
 
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: breakdown.servicePrice,
+    amount: params.servicePrice,
     currency: "jpy",
-    application_fee_amount: breakdown.platformFee,
+    application_fee_amount: platformFee,
     transfer_data: {
       destination: params.shopStripeAccountId,
     },
     metadata: {
       reservation_id: params.reservationId,
-      category: params.category,
-      car_type: params.carType,
-      platform_fee: String(breakdown.platformFee),
-      shop_payout: String(breakdown.shopPayout),
+      platform_fee: String(platformFee),
+      shop_payout: String(shopPayout),
     },
     ...(params.customerEmail && {
       receipt_email: params.customerEmail,
@@ -45,7 +37,8 @@ export async function createPaymentIntent(params: CreatePaymentParams) {
   return {
     clientSecret: paymentIntent.client_secret,
     paymentIntentId: paymentIntent.id,
-    breakdown,
+    platformFee,
+    shopPayout,
   };
 }
 
