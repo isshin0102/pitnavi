@@ -15,10 +15,10 @@ export async function createPaymentIntent(params: CreatePaymentParams) {
   }
 
   const platformFee = calculatePlatformFee(params.servicePrice);
-  const shopPayout = params.servicePrice - platformFee;
+  const customerTotal = params.servicePrice + platformFee;
 
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: params.servicePrice,
+    amount: customerTotal,
     currency: "jpy",
     application_fee_amount: platformFee,
     transfer_data: {
@@ -27,7 +27,7 @@ export async function createPaymentIntent(params: CreatePaymentParams) {
     metadata: {
       reservation_id: params.reservationId,
       platform_fee: String(platformFee),
-      shop_payout: String(shopPayout),
+      shop_payout: String(params.servicePrice),
     },
     ...(params.customerEmail && {
       receipt_email: params.customerEmail,
@@ -38,7 +38,8 @@ export async function createPaymentIntent(params: CreatePaymentParams) {
     clientSecret: paymentIntent.client_secret,
     paymentIntentId: paymentIntent.id,
     platformFee,
-    shopPayout,
+    shopPayout: params.servicePrice,
+    customerTotal,
   };
 }
 

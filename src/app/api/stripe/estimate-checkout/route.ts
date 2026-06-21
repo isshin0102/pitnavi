@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     }
 
     const platformFee = calculatePlatformFee(quotedPrice);
+    const customerTotal = quotedPrice + platformFee;
 
     const description = [
       `${shopName ?? "店舗"} - ${menuName ?? "作業"}`,
@@ -75,6 +76,16 @@ export async function POST(request: Request) {
           },
           quantity: 1,
         },
+        {
+          price_data: {
+            currency: "jpy",
+            product_data: {
+              name: "サービス手数料",
+            },
+            unit_amount: platformFee,
+          },
+          quantity: 1,
+        },
       ],
       mode: "payment",
       success_url: `${origin}/mypage/estimate-success?reservation_id=${reservationId}`,
@@ -89,7 +100,8 @@ export async function POST(request: Request) {
         reservation_id: reservationId,
         checkout_type: "estimate",
         platform_fee: String(platformFee),
-        shop_payout: String(quotedPrice - platformFee),
+        shop_payout: String(quotedPrice),
+        customer_total: String(customerTotal),
       },
     });
 

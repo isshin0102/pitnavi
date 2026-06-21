@@ -3,6 +3,7 @@ const PLATFORM_FEE_RATE = 0.10;
 export interface FeeBreakdown {
   servicePrice: number;
   platformFee: number;
+  customerTotal: number;
   shopPayout: number;
   feeRate: number;
 }
@@ -20,7 +21,8 @@ export function calculateFeeBreakdown(
   return {
     servicePrice,
     platformFee,
-    shopPayout: servicePrice - platformFee,
+    customerTotal: servicePrice + platformFee,
+    shopPayout: servicePrice,
     feeRate: PLATFORM_FEE_RATE,
   };
 }

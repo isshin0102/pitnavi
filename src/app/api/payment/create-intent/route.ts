@@ -21,10 +21,10 @@ export async function POST(request: Request) {
     }
 
     const platformFee = calculatePlatformFee(body.servicePrice);
-    const shopPayout = body.servicePrice - platformFee;
+    const customerTotal = body.servicePrice + platformFee;
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: body.servicePrice,
+      amount: customerTotal,
       currency: "jpy",
       application_fee_amount: platformFee,
       transfer_data: {
@@ -33,14 +33,15 @@ export async function POST(request: Request) {
       metadata: {
         reservation_id: body.reservationId,
         platform_fee: String(platformFee),
-        shop_payout: String(shopPayout),
+        shop_payout: String(body.servicePrice),
       },
     });
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
       platformFee,
-      shopPayout,
+      shopPayout: body.servicePrice,
+      customerTotal,
     });
   } catch (error) {
     const message =

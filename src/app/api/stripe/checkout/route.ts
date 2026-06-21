@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     }
 
     const platformFee = calculatePlatformFee(totalPrice);
+    const customerTotal = totalPrice + platformFee;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -48,6 +49,16 @@ export async function POST(request: Request) {
               description: `${shopName} - ${menuName}`,
             },
             unit_amount: totalPrice,
+          },
+          quantity: 1,
+        },
+        {
+          price_data: {
+            currency: "jpy",
+            product_data: {
+              name: "サービス手数料",
+            },
+            unit_amount: platformFee,
           },
           quantity: 1,
         },
@@ -65,7 +76,8 @@ export async function POST(request: Request) {
         reservation_id: reservationId,
         shop_id: shopId,
         platform_fee: String(platformFee),
-        shop_payout: String(totalPrice - platformFee),
+        shop_payout: String(totalPrice),
+        customer_total: String(customerTotal),
       },
     });
 
