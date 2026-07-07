@@ -67,12 +67,8 @@ export async function createConnectAccount(email: string) {
 
   const account = await stripe.accounts.create({
     type: "standard",
-    email,
     country: "JP",
-    capabilities: {
-      card_payments: { requested: true },
-      transfers: { requested: true },
-    },
+    email,
   });
 
   return account.id;

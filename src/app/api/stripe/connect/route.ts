@@ -39,24 +39,16 @@ export async function POST(request: Request) {
       } else {
         const account = await stripe.accounts.create({
           type: "standard",
-          email: email || user.email,
           country: "JP",
-          capabilities: {
-            card_payments: { requested: true },
-            transfers: { requested: true },
-          },
+          email: email || user.email,
         });
         accountId = account.id;
       }
     } else {
       const account = await stripe.accounts.create({
         type: "standard",
-        email: email || user.email,
         country: "JP",
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
+        email: email || user.email,
       });
       accountId = account.id;
     }
