@@ -115,21 +115,28 @@ export default function DashboardPage() {
         setRecordCount(records.length);
 
         const params = new URLSearchParams(window.location.search);
-        if (params.get("stripe") === "success" && first.stripe_account_id && !first.stripe_onboarded) {
-          try {
-            const res = await fetch("/api/stripe/connect-status", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ shopId: first.id }),
-            });
-            const result = await res.json();
-            if (result.onboarded) {
-              setSelectedShop({ ...first, stripe_onboarded: true });
-              setStripeSuccess("Stripe連携が完了しました！");
-              setTimeout(() => setStripeSuccess(""), 5000);
+        if (params.get("stripe") === "success") {
+          const targetShopId = params.get("shop") || first.id;
+          const targetShop = myShops.find((s) => s.id === targetShopId) || first;
+
+          if (targetShop.stripe_account_id && !targetShop.stripe_onboarded) {
+            try {
+              const res = await fetch("/api/stripe/connect-status", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ shopId: targetShop.id }),
+              });
+              const result = await res.json();
+              if (result.onboarded) {
+                const updated = { ...targetShop, stripe_onboarded: true };
+                setShops(myShops.map((s) => (s.id === updated.id ? updated : s)));
+                setSelectedShop(updated);
+                setStripeSuccess("Stripe連携が完了しました！");
+                setTimeout(() => setStripeSuccess(""), 5000);
+              }
+            } catch (e) {
+              console.error("[dashboard] stripe status check error:", e);
             }
-          } catch (e) {
-            console.error("[dashboard] stripe status check error:", e);
           }
           window.history.replaceState({}, "", "/dashboard");
         }
