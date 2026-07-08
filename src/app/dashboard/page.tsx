@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState("");
   const [stripeConnecting, setStripeConnecting] = useState(false);
+  const [stripeSuccess, setStripeSuccess] = useState("");
 
   const [shopName, setShopName] = useState("");
   const [address, setAddress] = useState("");
@@ -106,13 +107,32 @@ export default function DashboardPage() {
       setShops(myShops);
 
       if (myShops.length > 0) {
-        // 最新の店舗を選択
         const first = myShops[0];
         setSelectedShop(first);
         const menus = await getMyMenus(first.id);
         const records = await getMyWorkRecords(first.id);
         setMenuCount(menus.length);
         setRecordCount(records.length);
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("stripe") === "success" && first.stripe_account_id && !first.stripe_onboarded) {
+          try {
+            const res = await fetch("/api/stripe/connect-status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ shopId: first.id }),
+            });
+            const result = await res.json();
+            if (result.onboarded) {
+              setSelectedShop({ ...first, stripe_onboarded: true });
+              setStripeSuccess("Stripe連携が完了しました！");
+              setTimeout(() => setStripeSuccess(""), 5000);
+            }
+          } catch (e) {
+            console.error("[dashboard] stripe status check error:", e);
+          }
+          window.history.replaceState({}, "", "/dashboard");
+        }
       } else {
         setShowForm(true);
       }
@@ -329,11 +349,11 @@ export default function DashboardPage() {
   // メインダッシュボード
   return (
     <div className="space-y-6">
-      {/* 削除成功メッセージ */}
-      {deleteSuccess && (
+      {/* 成功メッセージ */}
+      {(deleteSuccess || stripeSuccess) && (
         <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
           <CheckCircle className="h-4 w-4 shrink-0" />
-          {deleteSuccess}
+          {deleteSuccess || stripeSuccess}
         </div>
       )}
 
