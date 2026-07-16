@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripeServer } from "@/lib/stripe/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendBookingConfirmation } from "@/lib/email/send";
 
 // Webhook は service_role キーで DB を更新する（RLS バイパス）
 function getAdminSupabase() {
@@ -40,7 +41,6 @@ export async function POST(request: Request) {
 
         if (reservationId && supabase) {
           if (checkoutType === "estimate") {
-            // 見積もり承諾決済 → contracted（成約）に更新
             await supabase
               .from("reservations")
               .update({
@@ -53,7 +53,6 @@ export async function POST(request: Request) {
 
             console.log(`[Webhook] Estimate paid: ${reservationId} → contracted`);
           } else {
-            // 通常の予約時決済 → confirmed に更新
             await supabase
               .from("reservations")
               .update({
@@ -65,6 +64,42 @@ export async function POST(request: Request) {
               .eq("id", reservationId);
 
             console.log(`[Webhook] Booking paid: ${reservationId} → confirmed`);
+          }
+
+          // メール通知送信
+          try {
+            const { data: reservation } = await supabase
+              .from("reservations")
+              .select("*, service_menus(name), shops(name, owner_id)")
+              .eq("id", reservationId)
+              .single();
+
+            if (reservation) {
+              const ownerEmail = reservation.shops?.owner_id
+                ? (await supabase.auth.admin.getUserById(reservation.shops.owner_id))
+                    .data?.user?.email
+                : null;
+
+              const customerEmail = session.customer_details?.email
+                || (await supabase.auth.admin.getUserById(reservation.customer_id))
+                    .data?.user?.email;
+
+              if (customerEmail) {
+                await sendBookingConfirmation({
+                  customerEmail,
+                  customerName: reservation.customer_name,
+                  shopName: reservation.shops?.name ?? "店舗",
+                  shopEmail: ownerEmail ?? "",
+                  menuName: reservation.service_menus?.name ?? "作業",
+                  date: reservation.preferred_date,
+                  time: reservation.preferred_time,
+                  price: reservation.quoted_price ?? reservation.total_price,
+                });
+                console.log(`[Webhook] Notification emails sent for: ${reservationId}`);
+              }
+            }
+          } catch (emailErr) {
+            console.error("[Webhook] Email notification failed:", emailErr);
           }
         }
         break;
