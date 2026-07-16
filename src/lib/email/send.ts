@@ -55,6 +55,7 @@ async function sendCustomerEmail(p: ReservationNotifyParams) {
 }
 
 async function sendShopEmail(p: ReservationNotifyParams) {
+  if (!p.shopEmail) return;
   await getResend().emails.send({
     from: FROM,
     to: p.shopEmail,
@@ -67,6 +68,65 @@ async function sendShopEmail(p: ReservationNotifyParams) {
           <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">お客様名</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.customerName}</td></tr>
           <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">作業内容</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.menuName}</td></tr>
           <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">日時</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.date} ${p.time}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">金額</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">¥${p.price.toLocaleString()}</td></tr>
+        </table>
+        <p style="color: #666; font-size: 12px;">ピトナビ ダッシュボードで詳細を確認できます。</p>
+      </div>
+    `,
+  });
+}
+
+export async function sendReservationRequest(params: ReservationNotifyParams) {
+  const results = await Promise.allSettled([
+    sendCustomerRequestEmail(params),
+    sendShopRequestEmail(params),
+  ]);
+
+  for (const r of results) {
+    if (r.status === "rejected") {
+      console.error("[email] request notification failed:", r.reason);
+    }
+  }
+}
+
+async function sendCustomerRequestEmail(p: ReservationNotifyParams) {
+  if (!p.customerEmail) return;
+  await getResend().emails.send({
+    from: FROM,
+    to: p.customerEmail,
+    subject: `【ピトナビ】予約リクエストを受け付けました`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto;">
+        <h2 style="color: #1a1a1a;">予約リクエスト受付</h2>
+        <p>${p.customerName} 様</p>
+        <p>予約リクエストを受け付けました。店舗からの確認をお待ちください。</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">店舗</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.shopName}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">作業内容</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.menuName}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">希望日時</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.date} ${p.time}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">金額</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">¥${p.price.toLocaleString()}</td></tr>
+        </table>
+        <p style="color: #666; font-size: 12px;">このメールはピトナビから自動送信されています。</p>
+      </div>
+    `,
+  });
+}
+
+async function sendShopRequestEmail(p: ReservationNotifyParams) {
+  if (!p.shopEmail) return;
+  await getResend().emails.send({
+    from: FROM,
+    to: p.shopEmail,
+    subject: `【ピトナビ】新しい予約リクエストが届きました`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto;">
+        <h2 style="color: #1a1a1a;">予約リクエストのお知らせ</h2>
+        <p>新しい予約リクエストが届きました。ダッシュボードで確認してください。</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">お客様名</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.customerName}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">連絡先</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.customerEmail}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">作業内容</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.menuName}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">希望日時</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">${p.date} ${p.time}</td></tr>
           <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #666;">金額</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">¥${p.price.toLocaleString()}</td></tr>
         </table>
         <p style="color: #666; font-size: 12px;">ピトナビ ダッシュボードで詳細を確認できます。</p>

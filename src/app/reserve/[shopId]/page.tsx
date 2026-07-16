@@ -95,30 +95,28 @@ export default function ReservePage({
     setErrorMsg("");
 
     try {
-      const { getCurrentUser } = await import("@/lib/data/auth");
-      const user = await getCurrentUser();
-
-      if (!user) {
-        setErrorMsg("ログインが必要です。");
-        setSubmitting(false);
-        return;
-      }
-
-      const { createReservation } = await import("@/lib/data/dashboard");
-      await createReservation({
-        customer_id: user.id,
-        shop_id: shopId,
-        service_menu_id: selectedMenu.id,
-        car_type: carType,
-        preferred_date: date,
-        preferred_time: time,
-        customer_name: name,
-        customer_phone: phone,
-        customer_note: note || undefined,
-        total_price: price,
-        platform_fee: 0,
-        shop_payout: price,
+      const res = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shop_id: shopId,
+          service_menu_id: selectedMenu.id,
+          car_type: carType,
+          preferred_date: date,
+          preferred_time: time,
+          customer_name: name,
+          customer_phone: phone,
+          customer_note: note || undefined,
+          total_price: price,
+          platform_fee: 0,
+          shop_payout: price,
+        }),
       });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "予約リクエストの送信に失敗しました");
+      }
 
       setStep("done");
     } catch (e) {
