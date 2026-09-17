@@ -75,6 +75,8 @@ export async function updateShop(
     postal_code?: string;
     specialty?: string[];
     license_number?: string;
+    line_channel_access_token?: string;
+    line_channel_secret?: string;
   }
 ) {
   if (!isSupabaseConfigured()) return { id: shopId, ...params };

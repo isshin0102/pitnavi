@@ -16,6 +16,8 @@ import {
   Trash2,
   AlertTriangle,
   ShieldCheck,
+  MessageCircle,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +74,8 @@ export default function ShopProfilePage() {
   const [lng, setLng] = useState("");
   const [specialty, setSpecialty] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
+  const [lineAccessToken, setLineAccessToken] = useState("");
+  const [lineSecret, setLineSecret] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -128,7 +132,7 @@ export default function ShopProfilePage() {
     }
   }
 
-  function populateForm(s: Shop) {
+  function populateForm(s: Shop & { line_channel_access_token?: string; line_channel_secret?: string }) {
     setName(s.name || "");
     setAddress(s.address || "");
     setPhone(s.phone || "");
@@ -137,6 +141,8 @@ export default function ShopProfilePage() {
     setLat(String(s.latitude || ""));
     setLng(String(s.longitude || ""));
     setSpecialty(s.specialty || []);
+    setLineAccessToken(s.line_channel_access_token || "");
+    setLineSecret(s.line_channel_secret || "");
   }
 
   function addTag(tag: string) {
@@ -174,6 +180,8 @@ export default function ShopProfilePage() {
         longitude: lng ? parseFloat(lng) : undefined,
         specialty,
         license_number: licenseNumber.trim(),
+        line_channel_access_token: lineAccessToken || undefined,
+        line_channel_secret: lineSecret || undefined,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -431,6 +439,62 @@ export default function ShopProfilePage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* LINE連携セクション */}
+      <div className="rounded-lg border p-4 space-y-4">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+          <MessageCircle className="h-4 w-4" />
+          LINE連携設定
+        </h3>
+        <p className="text-[11px] text-muted-foreground">
+          LINE Messaging APIのチャネル情報を設定すると、予約完了時にお客様のLINEに通知を送れます。
+        </p>
+
+        <div>
+          <Label className="text-sm mb-1.5 block">チャネルアクセストークン</Label>
+          <Input
+            type="password"
+            value={lineAccessToken}
+            onChange={(e) => setLineAccessToken(e.target.value)}
+            placeholder="LINE Developersで取得したトークン"
+          />
+        </div>
+
+        <div>
+          <Label className="text-sm mb-1.5 block">チャネルシークレット</Label>
+          <Input
+            type="password"
+            value={lineSecret}
+            onChange={(e) => setLineSecret(e.target.value)}
+            placeholder="LINE Developersで取得したシークレット"
+          />
+        </div>
+
+        {shop && lineAccessToken && (
+          <div className="rounded-md bg-muted/50 p-3">
+            <p className="text-xs font-medium mb-1">Webhook URL</p>
+            <div className="flex items-center gap-2">
+              <code className="text-[11px] bg-background rounded px-2 py-1 flex-1 overflow-x-auto">
+                {`${typeof window !== "undefined" ? window.location.origin : ""}/api/line/webhook/${shop.id}`}
+              </code>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `${window.location.origin}/api/line/webhook/${shop.id}`
+                  );
+                }}
+              >
+                <Copy className="h-3 w-3" />
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              このURLをLINE DevelopersのWebhook URLに設定してください
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 保存ボタン */}

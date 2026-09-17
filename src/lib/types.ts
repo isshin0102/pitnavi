@@ -136,6 +136,42 @@ export const WORK_CATEGORY_LABELS: Record<string, string> = {
   other: "その他",
 };
 
+export interface ShopRegularHoliday {
+  id: string;
+  shop_id: string;
+  day_of_week: number; // 0=日, 1=月, ..., 6=土
+  created_at: string;
+}
+
+export interface ShopBlockedSlot {
+  id: string;
+  shop_id: string;
+  blocked_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface LineFollower {
+  id: string;
+  shop_id: string;
+  line_user_id: string;
+  pitnavi_user_id: string | null;
+  display_name: string | null;
+  followed_at: string;
+}
+
+export const DAY_OF_WEEK_LABELS: Record<number, string> = {
+  0: "日曜日",
+  1: "月曜日",
+  2: "火曜日",
+  3: "水曜日",
+  4: "木曜日",
+  5: "金曜日",
+  6: "土曜日",
+};
+
 export interface PlatformFeeRule {
   id: string;
   category: ServiceCategory;

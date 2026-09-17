@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getStripeServer } from "@/lib/stripe/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendBookingConfirmation } from "@/lib/email/send";
+import {
+  sendLinePushMessage,
+  buildReservationNotificationMessages,
+} from "@/lib/line/send";
 
 // Webhook は service_role キーで DB を更新する（RLS バイパス）
 function getAdminSupabase() {
@@ -66,11 +70,11 @@ export async function POST(request: Request) {
             console.log(`[Webhook] Booking paid: ${reservationId} → confirmed`);
           }
 
-          // メール通知送信
+          // メール通知 + LINE通知送信
           try {
             const { data: reservation } = await supabase
               .from("reservations")
-              .select("*, service_menus(name), shops(name, owner_id)")
+              .select("*, service_menus(name), shops(name, owner_id, line_channel_access_token)")
               .eq("id", reservationId)
               .single();
 
@@ -84,22 +88,51 @@ export async function POST(request: Request) {
                 || (await supabase.auth.admin.getUserById(reservation.customer_id))
                     .data?.user?.email;
 
+              const notificationParams = {
+                customerName: reservation.customer_name,
+                shopName: reservation.shops?.name ?? "店舗",
+                menuName: reservation.service_menus?.name ?? "作業",
+                date: reservation.preferred_date,
+                time: reservation.preferred_time,
+                price: reservation.quoted_price ?? reservation.total_price,
+              };
+
+              // メール通知
               if (customerEmail) {
                 await sendBookingConfirmation({
+                  ...notificationParams,
                   customerEmail,
-                  customerName: reservation.customer_name,
-                  shopName: reservation.shops?.name ?? "店舗",
                   shopEmail: ownerEmail ?? "",
-                  menuName: reservation.service_menus?.name ?? "作業",
-                  date: reservation.preferred_date,
-                  time: reservation.preferred_time,
-                  price: reservation.quoted_price ?? reservation.total_price,
                 });
                 console.log(`[Webhook] Notification emails sent for: ${reservationId}`);
               }
+
+              // LINE通知
+              const lineToken = reservation.shops?.line_channel_access_token;
+              if (lineToken) {
+                try {
+                  const { data: follower } = await supabase
+                    .from("line_followers")
+                    .select("line_user_id")
+                    .eq("shop_id", reservation.shop_id)
+                    .eq("pitnavi_user_id", reservation.customer_id)
+                    .single();
+
+                  if (follower) {
+                    await sendLinePushMessage(
+                      lineToken,
+                      follower.line_user_id,
+                      buildReservationNotificationMessages(notificationParams)
+                    );
+                    console.log(`[Webhook] LINE notification sent for: ${reservationId}`);
+                  }
+                } catch (lineErr) {
+                  console.error("[Webhook] LINE notification failed:", lineErr);
+                }
+              }
             }
           } catch (emailErr) {
-            console.error("[Webhook] Email notification failed:", emailErr);
+            console.error("[Webhook] Notification failed:", emailErr);
           }
         }
         break;

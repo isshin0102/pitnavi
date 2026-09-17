@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { use } from "react";
 import Link from "next/link";
 import {
@@ -11,13 +11,21 @@ import {
   AlertCircle,
   Info,
 } from "lucide-react";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/style.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import type { CarType, ServiceMenu, Shop } from "@/lib/types";
+import type {
+  CarType,
+  ServiceMenu,
+  Shop,
+  ShopRegularHoliday,
+  ShopBlockedSlot,
+} from "@/lib/types";
 import { CAR_TYPE_LABELS, SERVICE_CATEGORY_LABELS } from "@/lib/types";
 import { formatYen } from "@/lib/fee-calculator";
 import { getShopById, getServiceMenus } from "@/lib/data/shops";
@@ -31,17 +39,22 @@ export default function ReservePage({
 
   const [shop, setShop] = useState<Shop | null>(null);
   const [menus, setMenus] = useState<ServiceMenu[]>([]);
+  const [holidays, setHolidays] = useState<ShopRegularHoliday[]>([]);
+  const [blockedSlots, setBlockedSlots] = useState<ShopBlockedSlot[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [s, m] = await Promise.all([
+        const [s, m, scheduleRes] = await Promise.all([
           getShopById(shopId),
           getServiceMenus(shopId),
+          fetch(`/api/shops/${shopId}/schedule`).then((r) => r.json()),
         ]);
         setShop(s);
         setMenus(m);
+        setHolidays(scheduleRes.holidays ?? []);
+        setBlockedSlots(scheduleRes.blockedSlots ?? []);
       } catch (e) {
         console.error("Failed to load reservation data:", e);
       } finally {
@@ -55,11 +68,56 @@ export default function ReservePage({
   const [selectedMenu, setSelectedMenu] = useState<ServiceMenu | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [date, setDate] = useState("");
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  const date = selectedDate
+    ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`
+    : "";
+
+  const holidayDays = useMemo(
+    () => new Set(holidays.map((h) => h.day_of_week)),
+    [holidays]
+  );
+
+  const fullDayBlockedDates = useMemo(
+    () =>
+      blockedSlots
+        .filter((s) => !s.start_time && !s.end_time)
+        .map((s) => new Date(s.blocked_date + "T00:00:00")),
+    [blockedSlots]
+  );
+
+  const isDateDisabled = (d: Date) => {
+    if (d < new Date(new Date().toDateString())) return true;
+    if (holidayDays.has(d.getDay())) return true;
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (
+      blockedSlots.some(
+        (s) => s.blocked_date === dateStr && !s.start_time && !s.end_time
+      )
+    )
+      return true;
+    return false;
+  };
+
+  const timeBlockedForDate = useMemo(() => {
+    if (!date) return [];
+    return blockedSlots.filter(
+      (s) => s.blocked_date === date && s.start_time && s.end_time
+    );
+  }, [date, blockedSlots]);
+
+  const isTimeBlocked = (t: string) => {
+    return timeBlockedForDate.some((slot) => {
+      const st = slot.start_time!;
+      const et = slot.end_time!;
+      return t >= st.slice(0, 5) && t < et.slice(0, 5);
+    });
+  };
 
   if (pageLoading) {
     return (
@@ -86,7 +144,12 @@ export default function ReservePage({
 
   const isInspection = selectedMenu?.category === "inspection";
   const canProceed =
-    selectedMenu && name.trim() && phone.trim() && date && time;
+    selectedMenu &&
+    name.trim() &&
+    phone.trim() &&
+    date &&
+    time &&
+    !isTimeBlocked(time);
 
   /** 予約リクエストを送信（決済なし） */
   async function handleSubmitReservation() {
@@ -281,28 +344,96 @@ export default function ReservePage({
               placeholder="090-1234-5678"
             />
           </div>
-          <div>
-            <Label htmlFor="date" className="text-sm mb-1 block">
-              希望日
-            </Label>
-            <Input
-              id="date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+        </div>
+
+        {/* カレンダー日付選択 */}
+        <div>
+          <Label className="text-sm mb-2 block">希望日を選択</Label>
+          <div className="rounded-lg border p-3 flex justify-center">
+            <DayPicker
+              mode="single"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              disabled={isDateDisabled}
+              startMonth={new Date()}
+              locale={{
+                localize: {
+                  day: (n: number) => ["日", "月", "火", "水", "木", "金", "土"][n],
+                  month: (n: number) =>
+                    [
+                      "1月", "2月", "3月", "4月", "5月", "6月",
+                      "7月", "8月", "9月", "10月", "11月", "12月",
+                    ][n],
+                  ordinalNumber: (n: number) => String(n),
+                  era: () => "",
+                  quarter: () => "",
+                  dayPeriod: () => "",
+                } as ReturnType<typeof Object>["localize"],
+                formatLong: {
+                  date: () => "yyyy/MM/dd",
+                  time: () => "HH:mm",
+                  dateTime: () => "yyyy/MM/dd HH:mm",
+                } as ReturnType<typeof Object>["formatLong"],
+                options: { weekStartsOn: 0 as const, firstWeekContainsDate: 1 },
+              } as never}
+              footer={
+                selectedDate ? (
+                  <p className="text-xs text-center mt-2 text-muted-foreground">
+                    選択: {date}
+                    {timeBlockedForDate.length > 0 && (
+                      <span className="text-orange-600 ml-2">
+                        ※一部時間帯が予約不可
+                      </span>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-xs text-center mt-2 text-muted-foreground">
+                    日付を選択してください
+                  </p>
+                )
+              }
             />
           </div>
-          <div>
-            <Label htmlFor="time" className="text-sm mb-1 block">
-              希望時間
-            </Label>
-            <Input
-              id="time"
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-            />
-          </div>
+          {holidayDays.size > 0 && (
+            <p className="text-[10px] text-muted-foreground mt-1">
+              グレーの日付は定休日のため予約できません。
+            </p>
+          )}
+        </div>
+
+        {/* 時間選択 */}
+        <div>
+          <Label htmlFor="time" className="text-sm mb-1 block">
+            希望時間
+          </Label>
+          <Input
+            id="time"
+            type="time"
+            value={time}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (isTimeBlocked(v)) {
+                setErrorMsg("この時間帯は予約不可に設定されています");
+                return;
+              }
+              setErrorMsg("");
+              setTime(v);
+            }}
+          />
+          {timeBlockedForDate.length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {timeBlockedForDate.map((slot) => (
+                <p
+                  key={slot.id}
+                  className="text-[10px] text-orange-600"
+                >
+                  ※ {slot.start_time?.slice(0, 5)}〜{slot.end_time?.slice(0, 5)}{" "}
+                  は予約不可
+                  {slot.reason && `（${slot.reason}）`}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>

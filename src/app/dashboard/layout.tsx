@@ -8,6 +8,7 @@ import {
   UtensilsCrossed,
   ClipboardList,
   CalendarCheck,
+  CalendarOff,
   Camera,
   Store,
   Settings,
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/menus", label: "メニュー管理", icon: UtensilsCrossed },
   { href: "/dashboard/records", label: "作業実績", icon: ClipboardList },
   { href: "/dashboard/reservations", label: "予約管理", icon: CalendarCheck },
+  { href: "/dashboard/schedule", label: "スケジュール管理", icon: CalendarOff },
   { href: "/dashboard/works", label: "実績ギャラリー", icon: Camera },
   { href: "/dashboard/profile", label: "ショップ情報", icon: Settings },
 ];
